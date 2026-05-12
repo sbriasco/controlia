@@ -15,13 +15,6 @@ import type { Empleado, Fichada, Novedad } from '../../types';
 
 // Ya no usamos weeklyData estático, se calculará dinámicamente.
 
-const novedadesPorTipo = [
-  { name: 'Tardanzas', value: 3, color: '#F59E0B' },
-  { name: 'Horas Extra', value: 2, color: '#17BEBB' },
-  { name: 'Ausencias', value: 1, color: '#EF4444' },
-  { name: 'Licencias', value: 3, color: '#2563EB' },
-];
-
 const recentActivity = [
   { text: 'Juan Pérez fichó entrada a las 09:12', time: 'Hace 10 min', color: 'green' as const },
   { text: 'María Gómez — tardanza detectada (15 min)', time: 'Hace 25 min', color: 'yellow' as const },
@@ -36,7 +29,6 @@ export function AdminDashboard() {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [novedadesReal, setNovedadesReal] = useState<Novedad[]>([]);
   const [fichadasReal, setFichadasReal] = useState<Fichada[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const getFichadasVersion = () => localStorage.getItem('fichadasVersion') || '0';
   const getEmpleadosVersion = () => localStorage.getItem('empleadosVersion') || '0';
@@ -118,7 +110,7 @@ export function AdminDashboard() {
       } catch (err) {
         console.error('Error cargando dashboard:', err);
       } finally {
-        setLoading(false);
+        // Intentionally left blank.
       }
     };
 
@@ -163,15 +155,6 @@ export function AdminDashboard() {
       .map(n => n.empleadoId)
   ).size;
 
-  const ausenciasToday = new Set(
-    novedadesReal
-      .filter(n => 
-        n.fechas.includes(hoy) && 
-        n.tipo === 'ausencia_injustificada' &&
-        empleadosTrabajandoHoy.some(e => e.id === n.empleadoId)
-      )
-      .map(n => n.empleadoId)
-  ).size;
   
   // Tipos de novedades para el gráfico
   const counts = {

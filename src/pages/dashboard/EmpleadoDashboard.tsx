@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LogIn, LogOut as LogOutIcon, Clock, CalendarDays, AlertCircle, Loader2 } from 'lucide-react';
-import { novedades } from '../../data/novedades'; // V2 mock - se reemplaza en V3
 import { useAuth } from '../../context/AuthContext';
 import { empleadoService } from '../../services/empleado.service';
 import { horarioService } from '../../services/horario.service';
