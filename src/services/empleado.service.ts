@@ -5,6 +5,12 @@ let empleadosCache: Empleado[] | null = null;
 let lastFetch = 0;
 const CACHE_DURATION = 300000; // 5 minutos de caché
 
+const notifyEmpleadosChanged = () => {
+  const version = Date.now().toString();
+  localStorage.setItem('empleadosVersion', version);
+  window.dispatchEvent(new CustomEvent('empleados:changed', { detail: { version } }));
+};
+
 export const empleadoService = {
   getAll: async (): Promise<Empleado[]> => {
     if (empleadosCache && Date.now() - lastFetch < CACHE_DURATION) {
@@ -30,6 +36,7 @@ export const empleadoService = {
       body: JSON.stringify(data),
     });
     empleadosCache = null; // Invalida el caché
+    notifyEmpleadosChanged();
     return res;
   },
     
@@ -39,15 +46,18 @@ export const empleadoService = {
       body: JSON.stringify(data),
     });
     empleadosCache = null; // Invalida el caché
+    notifyEmpleadosChanged();
     return res;
   },
     
-  delete: async (id: number): Promise<void> => {
-    await fetchApi(`/empleados/${id}`, {
+  delete: async (id: number, options?: { deleteUsers?: boolean }): Promise<void> => {
+    const params = options?.deleteUsers ? '?deleteUsers=true' : '';
+    await fetchApi(`/empleados/${id}${params}`, {
       method: 'DELETE',
     });
     if (empleadosCache) {
       empleadosCache = empleadosCache.filter(e => e.id !== id);
     }
+    notifyEmpleadosChanged();
   },
 };

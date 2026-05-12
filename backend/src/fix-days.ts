@@ -9,12 +9,10 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  console.log("Corrigiendo acentos en la base de datos...");
   await prisma.$executeRawUnsafe(`UPDATE horarios SET diassemana = REPLACE(diassemana, 'sábado', 'sabado');`);
   await prisma.$executeRawUnsafe(`UPDATE horarios SET diassemana = REPLACE(diassemana, 'miércoles', 'miercoles');`);
   await prisma.$executeRawUnsafe(`UPDATE empleados SET diasdescanso = REPLACE(diasdescanso, 'sábado', 'sabado');`);
   await prisma.$executeRawUnsafe(`UPDATE empleados SET diasdescanso = REPLACE(diasdescanso, 'miércoles', 'miercoles');`);
-  console.log("¡Hecho!");
 }
 
 main().catch(e => {

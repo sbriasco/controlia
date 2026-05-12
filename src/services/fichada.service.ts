@@ -15,6 +15,12 @@ export interface CreateFichadaPayload {
 let fichadasCache: Record<string, { data: Fichada[]; timestamp: number }> = {};
 const CACHE_DURATION = 300000; // 5 minutos de caché
 
+const notifyFichadasChanged = () => {
+  const version = Date.now().toString();
+  localStorage.setItem('fichadasVersion', version);
+  window.dispatchEvent(new CustomEvent('fichadas:changed', { detail: { version } }));
+};
+
 export const fichadaService = {
   getAll: async (params?: { fecha?: string; empleadoId?: number }): Promise<Fichada[]> => {
     const query = new URLSearchParams();
@@ -48,11 +54,13 @@ export const fichadaService = {
       body: JSON.stringify(data),
     });
     fichadasCache = {}; // Invalida el caché
+    notifyFichadasChanged();
     return res;
   },
 
   delete: async (id: number): Promise<void> => {
     await fetchApi(`/fichadas/${id}`, { method: 'DELETE' });
     fichadasCache = {}; // Invalida el caché
+    notifyFichadasChanged();
   },
 };

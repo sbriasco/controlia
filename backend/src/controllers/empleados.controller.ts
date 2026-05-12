@@ -125,18 +125,65 @@ export const updateEmpleado = async (req: Request, res: Response) => {
 export const deleteEmpleado = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const empleadoId = Number(id);
 
-    const empleado = await prisma.empleados.findUnique({ where: { id: Number(id) } });
+    const empleado = await prisma.empleados.findUnique({ where: { id: empleadoId } });
     if (!empleado) {
       return res.status(404).json({ message: 'Empleado no encontrado' });
     }
 
-    await prisma.empleados.delete({
-      where: { id: Number(id) },
-    });
-    
+    // Query params:
+    // - deleteUsers=true -> attempt to delete usuario records linked to this empleado (only if they have no external refs)
+    const deleteUsers = req.query.deleteUsers === 'true';
+
+    // Gather user ids related to this empleado
+    const usuariosRelacionados = await prisma.usuarios.findMany({ where: { empleadoid: empleadoId }, select: { id: true } });
+    const usuarioIds = usuariosRelacionados.map(u => u.id);
+
+    if (deleteUsers && usuarioIds.length > 0) {
+      // Check external references for each usuario: fichadas.usuarioregistro and cierresmensuales.usuariocierreid
+      for (const uid of usuarioIds) {
+        const [fichadasCount, cierresCount] = await Promise.all([
+          prisma.fichadas.count({ where: { usuarioregistro: uid } }),
+          prisma.cierresmensuales.count({ where: { usuariocierreid: uid } })
+        ]);
+        if (fichadasCount > 0 || cierresCount > 0) {
+          return res.status(400).json({ message: `No se puede eliminar el usuario ${uid}: tiene referencias en fichadas o cierresmensuales` });
+        }
+      }
+    }
+
+    // Perform deletions/updates in a single transaction to ensure atomicity.
+    // If deleteUsers=true and checks passed, delete those usuarios inside the transaction;
+    // otherwise nullify usuario.empleadoid.
+    const ops: any[] = [];
+
+    // 1. Romper auto-referencias en fichadas para evitar errores de FK al borrar en lote (mismo empleado)
+    ops.push(prisma.fichadas.updateMany({ 
+      where: { empleadoid: empleadoId }, 
+      data: { fichadaoriginalid: null } 
+    }));
+
+    ops.push(prisma.cierremensualdetalles.deleteMany({ where: { empleadoid: empleadoId } }));
+    ops.push(prisma.novedades.deleteMany({ where: { empleadoid: empleadoId } }));
+    ops.push(prisma.fichadas.deleteMany({ where: { empleadoid: empleadoId } }));
+
+    if (deleteUsers && usuarioIds.length > 0) {
+      ops.push(prisma.usuarios.deleteMany({ where: { id: { in: usuarioIds } } }));
+    } else {
+      ops.push(prisma.usuarios.updateMany({ where: { empleadoid: empleadoId }, data: { empleadoid: null } }));
+    }
+
+    ops.push(prisma.empleados.delete({ where: { id: empleadoId } }));
+
+    await prisma.$transaction(ops);
+
     res.status(204).send();
-  } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar empleado. Posiblemente tenga registros dependientes', error });
+  } catch (error: any) {
+    console.error('[DeleteEmpleado] Error:', error);
+    res.status(500).json({ 
+      message: 'Error al eliminar empleado. Posiblemente tenga registros dependientes o vinculados.',
+      details: error.message 
+    });
   }
 };

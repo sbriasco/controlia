@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LogIn, LogOut as LogOutIcon, Clock, CalendarDays, AlertCircle, Loader2 } from 'lucide-react';
 import { novedades } from '../../data/novedades'; // V2 mock - se reemplaza en V3
+import { useAuth } from '../../context/AuthContext';
 import { empleadoService } from '../../services/empleado.service';
 import { horarioService } from '../../services/horario.service';
 import { fichadaService } from '../../services/fichada.service';
-import type { Empleado, Horario, Fichada } from '../../types';
+import { novedadService } from '../../services/novedad.service';
+import type { Empleado, Horario, Fichada, Novedad } from '../../types';
 
 // ID del empleado demo (María Gómez = 2). En V3 vendrá del AuthContext real.
 const EMPLEADO_DEMO_ID = 2;
 
 export function EmpleadoDashboard() {
+  const { user } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [fichandoTipo, setFichandoTipo] = useState<'entrada' | 'salida' | null>(null);
@@ -17,6 +20,7 @@ export function EmpleadoDashboard() {
   const [empleado, setEmpleado] = useState<Empleado | null>(null);
   const [horario, setHorario] = useState<Horario | null>(null);
   const [myFichadas, setMyFichadas] = useState<Fichada[]>([]);
+  const [myNovedades, setMyNovedades] = useState<Novedad[]>([]);
   const [loading, setLoading] = useState(true);
   const [fichadaError, setFichadaError] = useState<string | null>(null);
 
@@ -25,13 +29,8 @@ export function EmpleadoDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const fetchFichadas = useCallback(async () => {
-    // Get local date in YYYY-MM-DD format, adjusting for timezone offset
-    const d = new Date();
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    const localISODate = new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
-
-    const data = await fichadaService.getAll({ empleadoId: EMPLEADO_DEMO_ID, fecha: localISODate });
+  const fetchFichadas = useCallback(async (empleadoId: number) => {
+    const data = await fichadaService.getAll({ empleadoId });
     const sorted = [...data].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     setMyFichadas(sorted.slice(0, 8));
     // Determinar si el último registro fue una entrada (= está fichado)
@@ -45,13 +44,29 @@ export function EmpleadoDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [emp] = await Promise.all([empleadoService.getById(EMPLEADO_DEMO_ID)]);
+        const currentEmpleadoId = user?.id ?? EMPLEADO_DEMO_ID;
+        const [emp] = await Promise.all([empleadoService.getById(currentEmpleadoId)]);
         setEmpleado(emp);
         if (emp.horarioId) {
           const hor = await horarioService.getById(emp.horarioId);
           setHorario(hor);
         }
-        await fetchFichadas();
+        await fetchFichadas(currentEmpleadoId);
+
+        // Cargar novedades reales
+        const hoy = new Date().toISOString().split('T')[0];
+        const periodoActual = hoy.substring(0, 7);
+        const primerDiaMes = periodoActual + '-01';
+
+        // Ejecutar interpretación demo para el empleado actual
+        await novedadService.processInterpretation(currentEmpleadoId, primerDiaMes, hoy);
+        
+        const novs = await novedadService.getAll({ 
+          empleadoId: currentEmpleadoId, 
+          periodo: periodoActual 
+        });
+        setMyNovedades(novs);
+
       } catch (err) {
         console.error('Error al cargar empleado:', err);
       } finally {
@@ -59,7 +74,7 @@ export function EmpleadoDashboard() {
       }
     };
     fetchData();
-  }, [fetchFichadas]);
+  }, [fetchFichadas, user]);
 
   const timeStr = currentTime.toLocaleTimeString('es-AR', {
     hour: '2-digit',
@@ -75,21 +90,28 @@ export function EmpleadoDashboard() {
     year: 'numeric',
   });
 
-  const myNovedades = novedades
-    .filter((n) => n.empleadoId === 2 && n.periodo === '2026-04')
-    .slice(0, 5);
+  // Ya no usamos el placeholder local
+  // const myNovedadesMock = novedades
+  //   .filter((n) => n.empleadoId === 2 && n.periodo === '2026-04')
+  //   .slice(0, 5);
 
   const handleFichar = async (tipo: 'entrada' | 'salida') => {
     setFichandoTipo(tipo);
     setFichadaError(null);
     try {
+      // Para mantener el enfoque local-as-UTC, enviamos la hora local actual 
+      // pero con el sufijo Z para que se guarde tal cual en la DB sin desplazamientos.
+      const d = new Date();
+      const localTimestamp = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
+
+      const currentEmpleadoId = user?.id ?? EMPLEADO_DEMO_ID;
       await fichadaService.create({
-        empleadoId: EMPLEADO_DEMO_ID,
-        timestamp: new Date().toISOString(),
+        empleadoId: currentEmpleadoId,
+        timestamp: localTimestamp,
         tipo,
         origen: 'manual',
       });
-      await fetchFichadas(); // Recargar lista actualizada
+      await fetchFichadas(currentEmpleadoId); // Recargar lista actualizada
     } catch (err: any) {
       setFichadaError('No se pudo registrar la fichada. Intentá de nuevo.');
       console.error(err);
@@ -210,9 +232,9 @@ export function EmpleadoDashboard() {
                     const d = new Date(f.timestamp);
                     return (
                       <tr key={f.id}>
-                        <td>{d.toLocaleDateString('es-AR')}</td>
+                        <td>{d.toISOString().split('T')[0].split('-').reverse().join('/')}</td>
                         <td style={{ fontWeight: 600 }}>
-                          {d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                          {d.toISOString().slice(11, 16)}
                         </td>
                         <td>
                           <span className={`badge badge-${f.tipo}`}>

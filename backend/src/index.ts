@@ -4,9 +4,20 @@ import cors from 'cors';
 import horariosRoutes from './routes/horarios.routes';
 import empleadosRoutes from './routes/empleados.routes';
 import fichadasRoutes from './routes/fichadas.routes';
+import interpretationRoutes from './routes/interpretation.routes';
+import novedadesRoutes from './routes/novedades.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Silenciar logs no criticos por defecto. Setear LOG_LEVEL=info para habilitarlos.
+const logLevel = process.env.LOG_LEVEL || 'error';
+if (logLevel === 'error') {
+  console.log = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+  console.warn = () => {};
+}
 
 app.use(cors());
 app.use(express.json());
@@ -15,6 +26,8 @@ app.use(express.json());
 app.use('/api/horarios', horariosRoutes);
 app.use('/api/empleados', empleadosRoutes);
 app.use('/api/fichadas', fichadasRoutes);
+app.use('/api/interpretation', interpretationRoutes);
+app.use('/api/novedades', novedadesRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Controlia Backend API V1 - Funcionando' });
@@ -22,7 +35,6 @@ app.get('/', (req, res) => {
 
 // Catch-all 404 para la API (devolver siempre JSON)
 app.use((req, res) => {
-  console.log(`[404] Ruta no encontrada: ${req.method} ${req.url}`);
   res.status(404).json({ 
     message: 'Ruta no encontrada en el servidor', 
     path: req.url,

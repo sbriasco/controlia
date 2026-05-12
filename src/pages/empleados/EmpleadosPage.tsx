@@ -13,6 +13,10 @@ export function EmpleadosPage() {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailEmpleado, setDetailEmpleado] = useState<Empleado | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [toDeleteEmpleado, setToDeleteEmpleado] = useState<Empleado | null>(null);
 
   const fetchEmpleados = async () => {
     try {
@@ -31,14 +35,30 @@ export function EmpleadosPage() {
     fetchEmpleados();
   }, []);
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('¿Estás seguro que deseas eliminar este empleado?')) {
-      try {
-        await empleadoService.delete(id);
-        setEmpleados(empleados.filter(e => e.id !== id));
-      } catch (err: any) {
-        alert('No se pudo eliminar: ' + err.message);
-      }
+  const confirmDelete = (emp: Empleado) => {
+    setToDeleteEmpleado(emp);
+    setShowDeleteModal(true);
+  };
+
+  const openDetail = (emp: Empleado) => {
+    setDetailEmpleado(emp);
+    setShowDetailModal(true);
+  };
+
+  const closeDetail = () => {
+    setShowDetailModal(false);
+    setDetailEmpleado(null);
+  };
+
+  const handleDelete = async () => {
+    if (!toDeleteEmpleado) return;
+    try {
+      await empleadoService.delete(toDeleteEmpleado.id);
+      setEmpleados((prev) => prev.filter(e => e.id !== toDeleteEmpleado.id));
+      setShowDeleteModal(false);
+      setToDeleteEmpleado(null);
+    } catch (err: any) {
+      alert('No se pudo eliminar: ' + err.message);
     }
   };
 
@@ -82,6 +102,12 @@ export function EmpleadosPage() {
     activo: empleados.filter((e) => e.estado === 'activo').length,
     inactivo: empleados.filter((e) => e.estado === 'inactivo').length,
     suspendido: empleados.filter((e) => e.estado === 'suspendido').length,
+  };
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return '-';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('es-AR');
   };
 
   if (loading) {
@@ -190,13 +216,17 @@ export function EmpleadosPage() {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                        <button className="btn btn-ghost btn-sm" title="Ver detalle">
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          title="Ver detalle"
+                          onClick={() => openDetail(emp)}
+                        >
                           <Eye size={15} />
                         </button>
                         <button className="btn btn-ghost btn-sm" title="Editar" onClick={() => navigate(`/empleados/${emp.id}`)}>
                           <Edit size={15} />
                         </button>
-                        <button className="btn btn-ghost btn-sm" title="Dar de baja" style={{ color: 'var(--rojo)' }} onClick={() => handleDelete(emp.id)}>
+                        <button className="btn btn-ghost btn-sm" title="Dar de baja" style={{ color: 'var(--rojo)' }} onClick={() => confirmDelete(emp)}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -217,6 +247,58 @@ export function EmpleadosPage() {
             <button className="btn btn-outline btn-sm" disabled>Siguiente</button>
           </div>
         </div>
+      {/* ── Modal detalle empleado ── */}
+      {showDetailModal && detailEmpleado && (
+        <div className="modal-backdrop" onClick={closeDetail}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Detalle de empleado</h3>
+              <button className="modal-close" onClick={closeDetail}>×</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
+                <div><strong>Legajo:</strong> #{detailEmpleado.legajo}</div>
+                <div><strong>Estado:</strong> {detailEmpleado.estado}</div>
+                <div><strong>Nombre:</strong> {detailEmpleado.nombre}</div>
+                <div><strong>Apellido:</strong> {detailEmpleado.apellido}</div>
+                <div><strong>DNI:</strong> {detailEmpleado.dni || '-'}</div>
+                <div><strong>CUIL:</strong> {detailEmpleado.cuil || '-'}</div>
+                <div><strong>Fecha ingreso:</strong> {formatDate(detailEmpleado.fechaIngreso)}</div>
+                <div><strong>Categoria:</strong> {detailEmpleado.categoriaLaboral || '-'}</div>
+                <div><strong>Convenio:</strong> {detailEmpleado.convenio || '-'}</div>
+                <div><strong>Jornada:</strong> {detailEmpleado.tipoJornada || '-'}</div>
+                <div><strong>Horario:</strong> {detailEmpleado.horarios?.nombre || '-'}</div>
+                <div><strong>Modalidad fichada:</strong> {detailEmpleado.modalidadFichada || '-'}</div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <strong>Dias descanso:</strong> {(detailEmpleado.diasDescanso || []).join(', ') || '-'}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-outline" onClick={closeDetail}>Cerrar</button>
+              <button className="btn btn-primary" onClick={() => navigate(`/empleados/${detailEmpleado.id}`)}>Editar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal eliminar empleado ── */}
+      {showDeleteModal && toDeleteEmpleado && (
+        <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Confirmar eliminación</h3>
+              <button className="modal-close" onClick={() => setShowDeleteModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>¿Confirmás eliminar a <strong>{toDeleteEmpleado.nombre} {toDeleteEmpleado.apellido} (#{toDeleteEmpleado.legajo})</strong> y sus datos relacionados?</p>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-outline" onClick={() => setShowDeleteModal(false)}>Cancelar</button>
+              <button className="btn btn-danger" onClick={() => handleDelete()}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

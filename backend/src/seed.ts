@@ -13,7 +13,7 @@ const horarios = [
     id: 1,
     nombre: 'Turno Mañana - Oficina',
     tipo: 'fijo',
-    diasSemana: ['lunes', 'martes', 'miércoles', 'jueves', 'viernes'],
+    diasSemana: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'],
     horaEntrada: '09:00',
     horaSalida: '18:00',
     toleranciaEntrada: 5,
@@ -27,7 +27,7 @@ const horarios = [
     id: 2,
     nombre: 'Turno Tarde - Comercio',
     tipo: 'fijo',
-    diasSemana: ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
+    diasSemana: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'],
     horaEntrada: '14:00',
     horaSalida: '22:00',
     toleranciaEntrada: 10,
@@ -41,7 +41,7 @@ const horarios = [
     id: 3,
     nombre: 'Jornada Reducida',
     tipo: 'parcial',
-    diasSemana: ['lunes', 'miércoles', 'viernes'],
+    diasSemana: ['lunes', 'miercoles', 'viernes'],
     horaEntrada: '08:00',
     horaSalida: '12:00',
     toleranciaEntrada: 5,
@@ -66,7 +66,7 @@ const empleados = [
     convenio: 'Comercio',
     tipoJornada: 'completa',
     horarioId: 1,
-    diasDescanso: ['sábado', 'domingo'],
+    diasDescanso: ['sabado', 'domingo'],
     modalidadFichada: 'biometrico',
     estado: 'activo',
   },
@@ -98,7 +98,7 @@ const empleados = [
     convenio: 'Metalúrgico',
     tipoJornada: 'completa',
     horarioId: 1,
-    diasDescanso: ['sábado', 'domingo'],
+    diasDescanso: ['sabado', 'domingo'],
     modalidadFichada: 'biometrico',
     estado: 'activo',
   },
@@ -114,7 +114,7 @@ const empleados = [
     convenio: 'Comercio',
     tipoJornada: 'parcial',
     horarioId: 3,
-    diasDescanso: ['martes', 'jueves', 'sábado', 'domingo'],
+    diasDescanso: ['martes', 'jueves', 'sabado', 'domingo'],
     modalidadFichada: 'pin',
     estado: 'activo',
   },
@@ -162,7 +162,7 @@ const empleados = [
     convenio: 'Metalúrgico',
     tipoJornada: 'completa',
     horarioId: 1,
-    diasDescanso: ['sábado', 'domingo'],
+    diasDescanso: ['sabado', 'domingo'],
     modalidadFichada: 'biometrico',
     estado: 'suspendido',
   },
@@ -178,7 +178,7 @@ const empleados = [
     convenio: 'Comercio',
     tipoJornada: 'completa',
     horarioId: 1,
-    diasDescanso: ['sábado', 'domingo'],
+    diasDescanso: ['sabado', 'domingo'],
     modalidadFichada: 'pin',
     estado: 'activo',
   },
@@ -194,7 +194,7 @@ const empleados = [
     convenio: 'Comercio',
     tipoJornada: 'completa',
     horarioId: 1,
-    diasDescanso: ['sábado', 'domingo'],
+    diasDescanso: ['sabado', 'domingo'],
     modalidadFichada: 'biometrico',
     estado: 'inactivo',
   },
@@ -210,7 +210,7 @@ const empleados = [
     convenio: 'Comercio',
     tipoJornada: 'parcial',
     horarioId: 3,
-    diasDescanso: ['martes', 'jueves', 'sábado', 'domingo'],
+    diasDescanso: ['martes', 'jueves', 'sabado', 'domingo'],
     modalidadFichada: 'pin',
     estado: 'activo',
   },
@@ -218,8 +218,13 @@ const empleados = [
 
 async function main() {
   console.log("Limpiando DB...");
+  await prisma.novedades.deleteMany();
+  await prisma.cierremensualdetalles.deleteMany();
+  await prisma.cierresmensuales.deleteMany();
+  await prisma.fichadas.deleteMany();
   await prisma.empleados.deleteMany();
   await prisma.horarios.deleteMany();
+  await prisma.usuarios.deleteMany();
 
   console.log("Creando Horarios...");
   for (const h of horarios) {

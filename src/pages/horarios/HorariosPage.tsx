@@ -13,27 +13,38 @@ export function HorariosPage() {
 
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (showLoader = false) => {
       try {
-        setLoading(true);
+        if (showLoader) setLoading(true);
         const [horariosData, empleadosData] = await Promise.all([
           horarioService.getAll(),
           empleadoService.getAll()
         ]);
         setHorarios(horariosData);
         setEmpleados(empleadosData);
+        setError(null);
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError('No se pudieron cargar los horarios.');
       } finally {
-        setLoading(false);
+        if (showLoader) setLoading(false);
       }
     };
-    fetchData();
+
+    fetchData(true);
+
+    const onHorariosChanged = () => {
+      fetchData(false);
+    };
+
+    window.addEventListener('horarios:changed', onHorariosChanged as EventListener);
+    return () => {
+      window.removeEventListener('horarios:changed', onHorariosChanged as EventListener);
+    };
   }, []);
 
   const handleDelete = async (id: number) => {
@@ -45,10 +56,6 @@ export function HorariosPage() {
       alert(err.message || 'Error al eliminar horario');
     }
   };
-
-  if (loading) {
-    return <div style={{ padding: '20px' }}>Cargando horarios...</div>;
-  }
 
   if (error) {
     return <div style={{ padding: '20px', color: 'red' }}>{error}</div>;
@@ -99,7 +106,7 @@ export function HorariosPage() {
       <div className="page-toolbar">
         <div className="page-toolbar-left">
           <span style={{ fontSize: '14px', color: 'var(--gris-texto)' }}>
-            {horarios.length} horarios configurados
+            {horarios.length} horarios configurados{loading ? ' · Actualizando...' : ''}
           </span>
         </div>
         <div className="page-toolbar-right">

@@ -34,7 +34,7 @@ export function FichadasPage() {
   // State
   const [fichadas, setFichadas] = useState<FichadaConEmpleado[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState(todayISO());
@@ -53,9 +53,9 @@ export function FichadasPage() {
 
   // ── Load data ────────────────────────────────────────────────
 
-  const loadFichadas = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadFichadas = useCallback(async (showLoader = false) => {
+    if (showLoader) setLoading(true);
+    if (showLoader) setError(null);
     try {
       const params: { fecha?: string; empleadoId?: number } = {};
       if (dateFilter) params.fecha = dateFilter;
@@ -63,15 +63,27 @@ export function FichadasPage() {
 
       const data = await fichadaService.getAll(params);
       setFichadas(data);
+      if (showLoader) setError(null);
     } catch (err: any) {
       setError(err.message || 'Error al cargar fichadas');
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }, [dateFilter, isAdmin, user?.id]);
 
   useEffect(() => {
-    loadFichadas();
+    loadFichadas(true);
+  }, [loadFichadas]);
+
+  useEffect(() => {
+    const onFichadasChanged = () => {
+      loadFichadas(false);
+    };
+
+    window.addEventListener('fichadas:changed', onFichadasChanged as EventListener);
+    return () => {
+      window.removeEventListener('fichadas:changed', onFichadasChanged as EventListener);
+    };
   }, [loadFichadas]);
 
   useEffect(() => {
@@ -124,7 +136,8 @@ export function FichadasPage() {
     setFormError(null);
 
     try {
-      const timestamp = new Date(`${form.fecha}T${form.hora}:00`).toISOString();
+      // Persistimos la hora tal cual se ingresa en la UI, sin corrimiento por zona horaria.
+      const timestamp = `${form.fecha}T${form.hora}:00Z`;
 
       await fichadaService.create({
         empleadoId: Number(form.empleadoId),
@@ -144,7 +157,7 @@ export function FichadasPage() {
         tipo: 'entrada',
         motivo: '',
       });
-      await loadFichadas();
+      await loadFichadas(false);
     } catch (err: any) {
       setFormError(err.message || 'Error al registrar fichada');
     } finally {
@@ -297,9 +310,9 @@ export function FichadasPage() {
                               </div>
                             </td>
                           )}
-                          <td>{d.toLocaleDateString('es-AR')}</td>
+                          <td>{d.toISOString().split('T')[0].split('-').reverse().join('/')}</td>
                           <td style={{ fontWeight: 600, fontFamily: 'var(--font-heading)' }}>
-                            {d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                            {d.toISOString().slice(11, 16)}
                           </td>
                           <td>
                             <span className={`badge badge-${f.tipo}`}>

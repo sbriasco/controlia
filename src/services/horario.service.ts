@@ -5,6 +5,12 @@ let horariosCache: Horario[] | null = null;
 let lastFetch = 0;
 const CACHE_DURATION = 300000; // 5 minutos de caché
 
+const notifyHorariosChanged = () => {
+  const version = Date.now().toString();
+  localStorage.setItem('horariosVersion', version);
+  window.dispatchEvent(new CustomEvent('horarios:changed', { detail: { version } }));
+};
+
 export const horarioService = {
   getAll: async (): Promise<Horario[]> => {
     if (horariosCache && Date.now() - lastFetch < CACHE_DURATION) {
@@ -30,6 +36,7 @@ export const horarioService = {
       body: JSON.stringify(data),
     });
     horariosCache = null; // Invalida el caché
+    notifyHorariosChanged();
     return res;
   },
     
@@ -39,6 +46,7 @@ export const horarioService = {
       body: JSON.stringify(data),
     });
     horariosCache = null; // Invalida el caché
+    notifyHorariosChanged();
     return res;
   },
     
@@ -49,5 +57,6 @@ export const horarioService = {
     if (horariosCache) {
       horariosCache = horariosCache.filter(h => h.id !== id);
     }
+    notifyHorariosChanged();
   },
 };

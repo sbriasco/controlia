@@ -96,6 +96,7 @@ model novedades {
   observacion     String?
   periodo         String    @db.VarChar(20)
   empleados       empleados @relation(fields: [empleadoid], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([empleadoid, tipo, fechasafectadas, origen, periodo])
 }
 
 model usuarios {

@@ -15,7 +15,9 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || 'Error en la petición a la API');
+    const err = new Error(errorData.message || 'Error en la petición a la API') as any;
+    if (errorData.errors) err.details = errorData.errors;
+    throw err;
   }
 
   // Handle 204 No Content

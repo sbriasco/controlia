@@ -43,6 +43,8 @@ export function EmpleadoForm() {
           const empleado = await empleadoService.getById(Number(id));
           setFormData({
             ...empleado,
+            dni: empleado.dni ? String(empleado.dni).replace(/\D/g, '') : '',
+            cuil: empleado.cuil ? String(empleado.cuil).replace(/\D/g, '') : '',
             fechaIngreso: empleado.fechaIngreso ? new Date(empleado.fechaIngreso).toISOString().split('T')[0] : '',
           });
         }
@@ -57,10 +59,11 @@ export function EmpleadoForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    const normalizedValue = (name === 'dni' || name === 'cuil') ? value.replace(/\D/g, '') : value;
     setFormData((prev) => {
       const newData = {
         ...prev,
-        [name]: name === 'horarioId' ? Number(value) : value,
+        [name]: name === 'horarioId' ? Number(normalizedValue) : normalizedValue,
       };
 
       // Auto-completar el Tipo de Jornada en base al Horario seleccionado (pero dejándolo editable)
@@ -102,14 +105,36 @@ export function EmpleadoForm() {
     setLoading(true);
 
     try {
+      // Sanitizar y validar DNI/CUIL antes de enviar
+      const payload: any = { ...formData };
+      payload.dni = (payload.dni || '').toString().replace(/\D/g, '');
+      payload.cuil = (payload.cuil || '').toString().replace(/\D/g, '');
+
+      if (payload.dni.length < 7 || payload.dni.length > 10) {
+        setError('DNI inválido: debe tener entre 7 y 10 dígitos');
+        setLoading(false);
+        return;
+      }
+      if (payload.cuil.length < 10 || payload.cuil.length > 12) {
+        setError('CUIL inválido: debe tener entre 10 y 12 dígitos');
+        setLoading(false);
+        return;
+      }
+
       if (isEditing) {
-        await empleadoService.update(Number(id), formData);
+        await empleadoService.update(Number(id), payload);
       } else {
-        await empleadoService.create(formData as any);
+        await empleadoService.create(payload as any);
       }
       navigate('/empleados');
     } catch (err: any) {
-      setError(err.message || 'Error al guardar el empleado');
+      // Mostrar detalles de validación si vienen desde el backend
+      if (err && err.details && Array.isArray(err.details)) {
+        const msgs = err.details.map((d: any) => `${d.field}: ${d.message}`);
+        setError(msgs.join(' — '));
+      } else {
+        setError(err.message || 'Error al guardar el empleado');
+      }
     } finally {
       setLoading(false);
     }
