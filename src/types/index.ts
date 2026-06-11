@@ -28,17 +28,35 @@ export interface Empleado {
   categoriaLaboral: string;
   convenio?: string;
   tipoJornada: TipoJornada;
-  horarioId: number;
+  horarioId?: number;
+  rotacionId?: number;
   diasDescanso: string[];
   modalidadFichada: ModalidadFichada;
   estado: EstadoEmpleado;
   email?: string;
   telefono?: string;
   horarios?: Horario;
+  rotacion?: Rotacion;
 }
 
-// ── Horarios ──
+// ── Horarios y Rotaciones ──
 export type TipoHorario = 'fijo' | 'rotativo' | 'flexible' | 'parcial';
+
+export interface Rotacion {
+  id: number;
+  nombre: string;
+  cicloSemanas: number;
+  fechaInicio: string; // ISO date
+  turnos: RotacionTurno[];
+}
+
+export interface RotacionTurno {
+  id: number;
+  rotacionId: number;
+  semana: number;
+  horarioId: number;
+  horarios?: Horario;
+}
 
 export interface Horario {
   id: number;
@@ -84,7 +102,9 @@ export type TipoNovedad =
   | 'vacaciones'
   | 'suspension'
   | 'permiso_especial'
-  | 'descanso_excedido';
+  | 'descanso_excedido'
+  | 'doble_fichada'
+  | 'descanso_no_tomado';
 
 export type EstadoNovedad = 'pendiente' | 'aprobada' | 'rechazada';
 export type OrigenNovedad = 'automatica' | 'manual';
@@ -123,6 +143,22 @@ export interface ResumenEmpleado {
   horasExtra100: number;      // in minutes
   tardanzasAcumuladas: number; // in minutes
   novedadesAprobadas: number[];  // Novedad IDs
+}
+
+// ── Feriados ──
+export interface Feriado {
+  id: number;
+  fecha: string;
+  descripcion: string;
+  tipo: 'nacional' | 'provincial' | 'empresa';
+}
+
+// ── Reglas de Empresa ──
+export interface ReglaEmpresa {
+  id: number;
+  clave: string;
+  valor: string;
+  descripcion?: string;
 }
 
 // ── Navigation ──

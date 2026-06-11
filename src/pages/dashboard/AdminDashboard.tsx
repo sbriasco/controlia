@@ -11,17 +11,8 @@ import {
 import { empleadoService } from '../../services/empleado.service';
 import { novedadService } from '../../services/novedad.service';
 import { fichadaService } from '../../services/fichada.service';
+import { getHorarioForDate } from '../../utils/rotacion';
 import type { Empleado, Fichada, Novedad } from '../../types';
-
-// Ya no usamos weeklyData estático, se calculará dinámicamente.
-
-const recentActivity = [
-  { text: 'Juan Pérez fichó entrada a las 09:12', time: 'Hace 10 min', color: 'green' as const },
-  { text: 'María Gómez — tardanza detectada (15 min)', time: 'Hace 25 min', color: 'yellow' as const },
-  { text: 'Carlos López — 1h 15min horas extra registradas', time: 'Hace 1 hora', color: 'teal' as const },
-  { text: 'Diego Silva — suspensión cargada (3 días)', time: 'Hace 2 horas', color: 'red' as const },
-  { text: 'Valentina Torres — licencia examen solicitada', time: 'Hace 3 horas', color: 'blue' as const },
-];
 
 export function AdminDashboard() {
   const navigate = useNavigate();
@@ -53,9 +44,12 @@ export function AdminDashboard() {
     const nombreDia = dayNames[diaDeLaSemana];
 
     return empleados.filter(e => {
-      if (e.estado !== 'activo' || !e.horarios) return false;
+      if (e.estado !== 'activo') return false;
+      const horarioActivo = getHorarioForDate(e, fecha);
+      if (!horarioActivo) return false;
+      
       const matchHiringDate = !e.fechaIngreso || parseLocalDate(e.fechaIngreso.substring(0, 10)) <= fechaConsulta;
-      return e.horarios.diasSemana.includes(nombreDia) && matchHiringDate;
+      return horarioActivo.diasSemana.includes(nombreDia) && matchHiringDate;
     });
   };
 
@@ -80,32 +74,27 @@ export function AdminDashboard() {
         const horariosVersionActual = getHorariosVersion();
         const interpretationVersionKey = getInterpretationVersionKey(periodo);
         const versionProcesada = localStorage.getItem(interpretationVersionKey) || '';
-        const versionCompuestaActual = `${versionActual}|${empleadosVersionActual}|${horariosVersionActual}`;
+        // Agregamos 'hoy' a la versión compuesta para forzar el recálculo cuando cambia de día
+        const versionCompuestaActual = `${versionActual}|${empleadosVersionActual}|${horariosVersionActual}|${hoy}`;
         
         const activos = emps.filter(e => e.estado === 'activo');
         if (versionCompuestaActual !== versionProcesada) {
-          console.log('[Dashboard] Reprocesando interpretación por cambios de fichadas...');
           await Promise.all(activos.map(e => 
             novedadService.processInterpretation(e.id, primerDiaMes, hoy)
           ));
           localStorage.setItem(interpretationVersionKey, versionCompuestaActual);
         }
 
-        // Obtener fichadas reales para calcular presentes por entradas efectivas
+        // Obtener fichadas reales para calcular presentes
         const fichadas = await fichadaService.getAll();
         setFichadasReal(fichadas);
         
         const novs = await novedadService.getAll({ periodo });
-        console.log('[Dashboard] Novedades cargadas:', novs.length);
-        console.log('[Dashboard] Muestra de novedades:', novs.slice(0, 2));
         
         // Filtrar novedades para que solo incluyan empleados activos
-        const novedadesActivos = novs.filter(n => {
-          const empleadoExiste = emps.some(e => e.id === n.empleadoId && e.estado === 'activo');
-          return empleadoExiste;
-        });
-        
-        console.log('[Dashboard] Novedades de empleados activos:', novedadesActivos.length);
+        const novedadesActivos = novs.filter(n => 
+          emps.some(e => e.id === n.empleadoId && e.estado === 'activo')
+        );
         setNovedadesReal(novedadesActivos);
       } catch (err) {
         console.error('Error cargando dashboard:', err);
@@ -155,13 +144,29 @@ export function AdminDashboard() {
       .map(n => n.empleadoId)
   ).size;
 
-  
+  // Calcular tardanzas de ayer para comparar
+  const ayerDate = new Date();
+  ayerDate.setDate(ayerDate.getDate() - 1);
+  const ayer = `${ayerDate.getFullYear()}-${String(ayerDate.getMonth() + 1).padStart(2, '0')}-${String(ayerDate.getDate()).padStart(2, '0')}`;
+  const ayerDayOfWeek = ayerDate.getDay();
+  const empleadosTrabajandoAyer = getEmpleadosQueTrabajan(ayerDayOfWeek, ayer);
+  const tardanzasYesterday = new Set(
+    novedadesReal
+      .filter(n => 
+        n.fechas.includes(ayer) && 
+        n.tipo === 'tardanza' &&
+        empleadosTrabajandoAyer.some(e => e.id === n.empleadoId)
+      )
+      .map(n => n.empleadoId)
+  ).size;
+  const tardanzasDiff = tardanzasToday - tardanzasYesterday;
   // Tipos de novedades para el gráfico
+  const licenciaTipos = ['licencia_enfermedad', 'licencia_examen', 'vacaciones', 'suspension', 'permiso_especial'];
   const counts = {
     tardanzas: novedadesReal.filter(n => n.tipo === 'tardanza').length,
     extras: novedadesReal.filter(n => n.tipo.startsWith('horas_extra')).length,
     ausencias: novedadesReal.filter(n => n.tipo.startsWith('ausencia')).length,
-    licencias: novedadesReal.filter(n => !['tardanza', 'horas_extra_50', 'horas_extra_100', 'ausencia_injustificada'].includes(n.tipo)).length,
+    licencias: novedadesReal.filter(n => licenciaTipos.includes(n.tipo)).length,
   };
 
   const dynamicNovedadesPorTipo = [
@@ -202,10 +207,6 @@ export function AdminDashboard() {
         .map(n => n.empleadoId);
 
       const ausentes = new Set(ausentesList).size;
-
-      if (ausentes > 0) {
-        console.log(`[Dashboard] Dia ${dStr}: Ausentes IDs:`, Array.from(new Set(ausentesList)));
-      }
       
       // Presentes: empleados con al menos una entrada registrada ese día y asignados a trabajar.
       const presentes = new Set(
@@ -259,8 +260,6 @@ export function AdminDashboard() {
 
   const last7Days = getRollingLast7Days();
 
-  console.log('[Dashboard] Datos finales del gráfico:', last7Days);
-
   return (
     <div className="dashboard-page">
       <div className="dashboard-welcome">
@@ -291,7 +290,14 @@ export function AdminDashboard() {
           <div className="stat-info">
             <span className="stat-label">Tardanzas Hoy</span>
             <span className="stat-value">{tardanzasToday}</span>
-            <span className="stat-change down">↑ vs ayer</span>
+            {tardanzasDiff !== 0 && (
+              <span className={`stat-change ${tardanzasDiff > 0 ? 'down' : 'up'}`}>
+                {tardanzasDiff > 0 ? `+${tardanzasDiff}` : tardanzasDiff} vs ayer
+              </span>
+            )}
+            {tardanzasDiff === 0 && tardanzasToday > 0 && (
+              <span className="stat-change">igual que ayer</span>
+            )}
           </div>
         </div>
         <div className="stat-card" id="stat-novedades">
@@ -426,7 +432,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Actividad Reciente — fichadas reales */}
       <div className="dashboard-section" style={{ marginTop: 'var(--space-8)' }}>
         <div className="dashboard-section-header">
           <h3 className="dashboard-section-title">Actividad Reciente</h3>
@@ -437,15 +443,31 @@ export function AdminDashboard() {
         <div className="card">
           <div className="card-body">
             <div className="activity-list">
-              {recentActivity.map((activity, i) => (
-                <div className="activity-item" key={i}>
-                  <div className={`activity-dot ${activity.color}`} />
-                  <div className="activity-content">
-                    <div className="activity-text">{activity.text}</div>
-                    <div className="activity-time">{activity.time}</div>
-                  </div>
+              {fichadasReal
+                .filter(f => getLocalDateStringFromTimestamp(f.timestamp) === hoy)
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                .slice(0, 5)
+                .map((f) => {
+                  const emp = empleados.find(e => e.id === f.empleadoId);
+                  const hora = new Date(f.timestamp).toISOString().slice(11, 16);
+                  const nombre = emp ? `${emp.nombre} ${emp.apellido}` : `Empleado #${f.empleadoId}`;
+                  return (
+                    <div className="activity-item" key={f.id}>
+                      <div className={`activity-dot ${f.tipo === 'entrada' ? 'green' : 'blue'}`} />
+                      <div className="activity-content">
+                        <div className="activity-text">
+                          {nombre} — {f.tipo === 'entrada' ? 'entrada' : 'salida'} a las {hora}
+                        </div>
+                        <div className="activity-time">{f.origen}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              {fichadasReal.filter(f => getLocalDateStringFromTimestamp(f.timestamp) === hoy).length === 0 && (
+                <div style={{ padding: '16px', color: 'var(--gris-texto)', textAlign: 'center' }}>
+                  Sin fichadas registradas hoy.
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

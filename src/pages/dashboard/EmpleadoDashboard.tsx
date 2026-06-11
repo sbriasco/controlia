@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { LogIn, LogOut as LogOutIcon, Clock, CalendarDays, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { empleadoService } from '../../services/empleado.service';
-import { horarioService } from '../../services/horario.service';
 import { fichadaService } from '../../services/fichada.service';
 import { novedadService } from '../../services/novedad.service';
+import { getHorarioForDate } from '../../utils/rotacion';
 import type { Empleado, Horario, Fichada, Novedad } from '../../types';
 
 // ID del empleado demo (María Gómez = 2). En V3 vendrá del AuthContext real.
@@ -46,19 +46,30 @@ export function EmpleadoDashboard() {
         const currentEmpleadoId = user?.id ?? EMPLEADO_DEMO_ID;
         const [emp] = await Promise.all([empleadoService.getById(currentEmpleadoId)]);
         setEmpleado(emp);
-        if (emp.horarioId) {
-          const hor = await horarioService.getById(emp.horarioId);
-          setHorario(hor);
+        
+        const hoyStr = new Date().toISOString().split('T')[0];
+        const horActivo = getHorarioForDate(emp, hoyStr);
+        if (horActivo) {
+          setHorario(horActivo);
         }
+
         await fetchFichadas(currentEmpleadoId);
 
         // Cargar novedades reales
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = hoyStr;
         const periodoActual = hoy.substring(0, 7);
         const primerDiaMes = periodoActual + '-01';
 
-        // Ejecutar interpretación demo para el empleado actual
-        await novedadService.processInterpretation(currentEmpleadoId, primerDiaMes, hoy);
+        // Solo reprocesar si hubo cambios (usa misma lógica de versión que el Admin)
+        const versionBase = localStorage.getItem('fichadasVersion') || '0';
+        const versionActual = `${versionBase}|${hoy}`;
+        const empVersionKey = `empDashInterpretation:${currentEmpleadoId}:${periodoActual}`;
+        const versionProcesada = localStorage.getItem(empVersionKey) || '';
+
+        if (versionActual !== versionProcesada) {
+          await novedadService.processInterpretation(currentEmpleadoId, primerDiaMes, hoy);
+          localStorage.setItem(empVersionKey, versionActual);
+        }
         
         const novs = await novedadService.getAll({ 
           empleadoId: currentEmpleadoId, 

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import { empleadoService } from '../../services/empleado.service';
+import { rotacionService } from '../../services/rotacion.service';
 import { horarioService } from '../../services/horario.service';
-import type { Empleado, Horario } from '../../types';
+import type { Empleado, Horario, Rotacion } from '../../types';
 
 export function EmpleadoForm() {
   const navigate = useNavigate();
@@ -14,6 +15,8 @@ export function EmpleadoForm() {
   const [loadingData, setLoadingData] = useState(isEditing);
   const [error, setError] = useState<string | null>(null);
   const [horariosDisponibles, setHorariosDisponibles] = useState<Horario[]>([]);
+  const [rotacionesDisponibles, setRotacionesDisponibles] = useState<Rotacion[]>([]);
+  const [tipoAsignacion, setTipoAsignacion] = useState<'fijo' | 'rotativo'>('fijo');
 
   const [formData, setFormData] = useState<Partial<Empleado>>({
     legajo: '',
@@ -26,6 +29,7 @@ export function EmpleadoForm() {
     convenio: '',
     tipoJornada: 'completa',
     horarioId: 0,
+    rotacionId: 0,
     diasDescanso: [],
     modalidadFichada: 'biometrico',
     estado: 'activo',
@@ -38,9 +42,12 @@ export function EmpleadoForm() {
       try {
         const horarios = await horarioService.getAll();
         setHorariosDisponibles(horarios);
+        const rotaciones = await rotacionService.getAll();
+        setRotacionesDisponibles(rotaciones);
 
         if (isEditing) {
           const empleado = await empleadoService.getById(Number(id));
+          setTipoAsignacion(empleado.rotacionId ? 'rotativo' : 'fijo');
           setFormData({
             ...empleado,
             dni: empleado.dni ? String(empleado.dni).replace(/\D/g, '') : '',
@@ -63,7 +70,7 @@ export function EmpleadoForm() {
     setFormData((prev) => {
       const newData = {
         ...prev,
-        [name]: name === 'horarioId' ? Number(normalizedValue) : normalizedValue,
+        [name]: (name === 'horarioId' || name === 'rotacionId') ? Number(normalizedValue) : normalizedValue,
       };
 
       // Auto-completar el Tipo de Jornada en base al Horario seleccionado (pero dejándolo editable)
@@ -85,19 +92,26 @@ export function EmpleadoForm() {
         }
       }
 
+      if (name === 'rotacionId') {
+        newData.tipoJornada = 'completa';
+        newData.diasDescanso = []; // En rotativo los dias libres dependen de la rotación dinámica
+      }
+
       return newData;
     });
   };
 
-  const handleDiasDescanso = (dia: string) => {
-    setFormData((prev) => {
-      const dias = prev.diasDescanso || [];
-      if (dias.includes(dia)) {
-        return { ...prev, diasDescanso: dias.filter(d => d !== dia) };
-      }
-      return { ...prev, diasDescanso: [...dias, dia] };
-    });
+  const handleTipoAsignacionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value as 'fijo' | 'rotativo';
+    setTipoAsignacion(val);
+    if (val === 'fijo') {
+      setFormData(prev => ({ ...prev, rotacionId: 0, horarioId: 0 }));
+    } else {
+      setFormData(prev => ({ ...prev, horarioId: 0, rotacionId: 0 }));
+    }
   };
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +123,12 @@ export function EmpleadoForm() {
       const payload: any = { ...formData };
       payload.dni = (payload.dni || '').toString().replace(/\D/g, '');
       payload.cuil = (payload.cuil || '').toString().replace(/\D/g, '');
+
+      if (tipoAsignacion === 'fijo') {
+        payload.rotacionId = 0;
+      } else {
+        payload.horarioId = 0;
+      }
 
       if (payload.dni.length < 7 || payload.dni.length > 10) {
         setError('DNI inválido: debe tener entre 7 y 10 dígitos');
@@ -213,14 +233,34 @@ export function EmpleadoForm() {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Horario Asignado *</label>
-                <select name="horarioId" value={formData.horarioId} onChange={handleChange} className="form-control" style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: '#f9f9f9', color: 'var(--text-h)' }}>
-                  <option value="0">Seleccione un horario...</option>
-                  {horariosDisponibles.map(h => (
-                    <option key={h.id} value={h.id}>{h.nombre} ({h.horaEntrada} - {h.horaSalida})</option>
-                  ))}
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Tipo de Asignación *</label>
+                <select value={tipoAsignacion} onChange={handleTipoAsignacionChange} className="form-control" style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: '#f9f9f9', color: 'var(--text-h)' }}>
+                  <option value="fijo">Horario Fijo</option>
+                  <option value="rotativo">Horario Rotativo</option>
                 </select>
               </div>
+
+              {tipoAsignacion === 'fijo' ? (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Horario Asignado *</label>
+                  <select name="horarioId" value={formData.horarioId || 0} onChange={handleChange} className="form-control" style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: '#f9f9f9', color: 'var(--text-h)' }}>
+                    <option value="0">Seleccione un horario...</option>
+                    {horariosDisponibles.map(h => (
+                      <option key={h.id} value={h.id}>{h.nombre} ({h.horaEntrada} - {h.horaSalida})</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Rotación Asignada *</label>
+                  <select name="rotacionId" value={formData.rotacionId || 0} onChange={handleChange} className="form-control" style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: '#f9f9f9', color: 'var(--text-h)' }}>
+                    <option value="0">Seleccione una rotación...</option>
+                    {rotacionesDisponibles.map(r => (
+                      <option key={r.id} value={r.id}>{r.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Modalidad de Fichada *</label>
                 <select name="modalidadFichada" value={formData.modalidadFichada} onChange={handleChange} className="form-control" style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: '#f9f9f9', color: 'var(--text-h)' }}>
@@ -240,23 +280,13 @@ export function EmpleadoForm() {
               </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Días de Descanso *</label>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'].map(dia => (
-                  <label key={dia} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' }}>
-                    <input type="checkbox" checked={formData.diasDescanso?.includes(dia)} onChange={() => handleDiasDescanso(dia)} />
-                    {dia.charAt(0).toUpperCase() + dia.slice(1)}
-                  </label>
-                ))}
-              </div>
-            </div>
+
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
               <button type="button" className="btn btn-outline" onClick={() => navigate('/empleados')} disabled={loading}>
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-primary" disabled={loading || !formData.horarioId}>
+              <button type="submit" className="btn btn-primary" disabled={loading || (tipoAsignacion === 'fijo' && !formData.horarioId) || (tipoAsignacion === 'rotativo' && !formData.rotacionId)}>
                 <Save size={16} /> {loading ? 'Guardando...' : 'Guardar Empleado'}
               </button>
             </div>

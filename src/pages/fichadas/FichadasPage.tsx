@@ -123,6 +123,7 @@ export function FichadasPage() {
   // ── Submit fichada manual ─────────────────────────────────────
 
   const handleSubmit = async () => {
+    if (submitting) return; // Guard contra doble-click
     if (!form.empleadoId) {
       setFormError('Seleccioná un empleado');
       return;
@@ -136,20 +137,21 @@ export function FichadasPage() {
     setFormError(null);
 
     try {
-      // Persistimos la hora tal cual se ingresa en la UI, sin corrimiento por zona horaria.
-      const timestamp = `${form.fecha}T${form.hora}:00Z`;
-
-      await fichadaService.create({
+      // Capturar los valores del form ANTES de cualquier reset
+      const payload = {
         empleadoId: Number(form.empleadoId),
-        timestamp,
+        timestamp: `${form.fecha}T${form.hora}:00Z`,
         tipo: form.tipo,
-        origen: 'manual',
-        // usuarioRegistro se agregará cuando haya auth real
+        origen: 'manual' as const,
         motivo: form.motivo || undefined,
         esCorreccion: false,
-      });
+      };
 
+      // Cerrar modal inmediatamente para evitar doble-click
       setShowModal(false);
+
+      await fichadaService.create(payload);
+
       setForm({
         empleadoId: '',
         fecha: todayISO(),
@@ -160,6 +162,7 @@ export function FichadasPage() {
       await loadFichadas(false);
     } catch (err: any) {
       setFormError(err.message || 'Error al registrar fichada');
+      setShowModal(true); // Re-abrir modal para mostrar el error
     } finally {
       setSubmitting(false);
     }

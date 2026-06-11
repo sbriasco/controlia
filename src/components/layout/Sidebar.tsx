@@ -5,14 +5,17 @@ import {
   Clock,
   CalendarCheck,
   FileText,
-  FileBarChart,
   Settings,
   LogOut,
   Menu,
   X,
+  Calendar,
+  AlertCircle,
+  Briefcase
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { novedadService } from '../../services/novedad.service';
 import { Logo } from '../ui/Logo';
 import type { UserRole } from '../../types';
 import './Sidebar.css';
@@ -39,10 +42,16 @@ const navItems: NavItem[] = [
     roles: ['admin'],
   },
   {
-    label: 'Horarios y Turnos',
+    label: 'Horarios',
     path: '/horarios',
     icon: <CalendarCheck size={20} />,
     roles: ['admin', 'empleado'],
+  },
+  {
+    label: 'Rotaciones',
+    path: '/rotaciones',
+    icon: <Briefcase size={20} />,
+    roles: ['admin'],
   },
   {
     label: 'Fichadas',
@@ -53,19 +62,24 @@ const navItems: NavItem[] = [
   {
     label: 'Novedades',
     path: '/novedades',
-    icon: <FileText size={20} />,
+    icon: <AlertCircle size={20} />,
     roles: ['admin', 'empleado'],
-    badge: 4,
   },
   {
     label: 'Cierre Mensual',
-    path: '/cierre',
-    icon: <FileBarChart size={20} />,
+    path: '/cierres',
+    icon: <FileText size={20} />,
     roles: ['admin', 'contador'],
   },
   {
+    label: 'Feriados',
+    path: '/feriados',
+    icon: <Calendar size={20} />,
+    roles: ['admin'],
+  },
+  {
     label: 'Configuración',
-    path: '/configuracion',
+    path: '/reglas',
     icon: <Settings size={20} />,
     roles: ['admin'],
   },
@@ -76,10 +90,25 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingNovedadesCount, setPendingNovedadesCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (user) {
+      novedadService.getAll().then(novedades => {
+        const count = novedades.filter(n => n.estado === 'pendiente' && (user.rol === 'admin' || n.empleadoId === user.id)).length;
+        setPendingNovedadesCount(count);
+      }).catch(console.error);
+    }
+  }, [user, location.pathname]); // Update count when navigating
 
   if (!user) return null;
 
-  const filteredItems = navItems.filter((item) => item.roles.includes(user.rol));
+  const filteredItems = navItems.filter((item) => item.roles.includes(user.rol)).map(item => {
+    if (item.label === 'Novedades' && pendingNovedadesCount > 0) {
+      return { ...item, badge: pendingNovedadesCount };
+    }
+    return item;
+  });
 
   const handleNav = (path: string) => {
     navigate(path);

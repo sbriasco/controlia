@@ -1,6 +1,51 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
-import { InterpretationService } from '../services/interpretation.service';
+import { InterpretationService, ReglasConfig } from '../services/interpretation.service';
+import { getReglasMap } from './reglas.controller';
+
+// Valores por defecto para las reglas (si no existen en la DB)
+const REGLAS_DEFAULTS: ReglasConfig = {
+  doble_fichada_umbral_minutos: 5,
+  salida_anticipada_tolerancia_minutos: 10,
+  horas_extra_tipo_domingo_feriado: 100,
+  horas_extra_tipo_habil: 50,
+  descanso_no_tomado_habilitar: true,
+  ausencia_auto_estado: 'pendiente'
+};
+
+/**
+ * Carga las reglas de la DB y las combina con los defaults.
+ */
+async function loadReglas(): Promise<ReglasConfig> {
+  const map = await getReglasMap();
+  return {
+    doble_fichada_umbral_minutos: Number(map['doble_fichada_umbral_minutos'] ?? REGLAS_DEFAULTS.doble_fichada_umbral_minutos),
+    salida_anticipada_tolerancia_minutos: Number(map['salida_anticipada_tolerancia_minutos'] ?? REGLAS_DEFAULTS.salida_anticipada_tolerancia_minutos),
+    horas_extra_tipo_domingo_feriado: Number(map['horas_extra_tipo_domingo_feriado'] ?? REGLAS_DEFAULTS.horas_extra_tipo_domingo_feriado),
+    horas_extra_tipo_habil: Number(map['horas_extra_tipo_habil'] ?? REGLAS_DEFAULTS.horas_extra_tipo_habil),
+    descanso_no_tomado_habilitar: (map['descanso_no_tomado_habilitar'] ?? 'true') === 'true',
+    ausencia_auto_estado: map['ausencia_auto_estado'] ?? REGLAS_DEFAULTS.ausencia_auto_estado,
+  };
+}
+
+/**
+ * Carga los feriados del período como un Set de fechas en formato YYYY-MM-DD.
+ */
+async function loadFeriadosSet(startDate: string, endDate: string): Promise<Set<string>> {
+  const feriados = await prisma.feriados.findMany({
+    where: {
+      fecha: {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      }
+    }
+  });
+  const set = new Set<string>();
+  for (const f of feriados) {
+    set.add(f.fecha.toISOString().split('T')[0]);
+  }
+  return set;
+}
 
 export const processInterpretation = async (req: Request, res: Response) => {
   try {
@@ -18,19 +63,25 @@ export const processInterpretation = async (req: Request, res: Response) => {
 
     const start = parseLocalDate(startDate);
     const end = parseLocalDate(endDate);
-    end.setHours(23, 59, 59, 999); // Asegurar que incluya todo el día de hoy
+    end.setHours(23, 59, 59, 999);
 
     // 1. Obtener Empleado y su Horario
     const empleado = await prisma.empleados.findUnique({
       where: { id: Number(empleadoId) },
-      include: { horarios: true }
+      include: { 
+        horarios: true,
+        rotaciones: {
+          include: {
+            turnos: { include: { horarios: true }, orderBy: { semana: 'asc' } }
+          }
+        }
+      }
     });
 
     if (!empleado) {
       return res.status(404).json({ message: 'Empleado no encontrado' });
     }
 
-    // Verificar que el empleado sea activo
     if (empleado.estado !== 'activo') {
       return res.json({
         message: 'Empleado no activo, no se procesa interpretación',
@@ -38,10 +89,12 @@ export const processInterpretation = async (req: Request, res: Response) => {
       });
     }
 
-    const horario = empleado.horarios;
+    // 2. Cargar reglas parametrizables y feriados
+    const reglas = await loadReglas();
+    const feriadosSet = await loadFeriadosSet(startDate, endDate);
 
-    // 2. Preparar periodo y fecha de ingreso del empleado
-    const periodo = startDate.substring(0, 7); // YYYY-MM
+    // 3. Preparar periodo y fecha de ingreso del empleado
+    const periodo = startDate.substring(0, 7);
 
     const formatUTCDate = (date: Date): string => {
       const y = date.getUTCFullYear();
@@ -53,7 +106,7 @@ export const processInterpretation = async (req: Request, res: Response) => {
     const fechaIngresoEmpleado = empleado.fechaingreso ? new Date(empleado.fechaingreso) : null;
     const fechaIngresoStr = fechaIngresoEmpleado ? formatUTCDate(fechaIngresoEmpleado) : null;
 
-    // 3. Obtener Fichadas del rango
+    // 4. Obtener Fichadas del rango
     const fichadas = await prisma.fichadas.findMany({
       where: {
         empleadoid: Number(empleadoId),
@@ -62,55 +115,84 @@ export const processInterpretation = async (req: Request, res: Response) => {
       orderBy: { timestamp: 'asc' }
     });
 
-    // 4. Procesar día por día (ignorar días anteriores a fechaIngreso)
-    const detectedNovelties = [];
+    // 5. Procesar día por día
+    const detectedNovelties: any[] = [];
 
-    // Ajustar inicio efectivo si el empleado ingreso despues del rango solicitado
     const effectiveStartStr = fechaIngresoStr && startDate < fechaIngresoStr ? fechaIngresoStr : startDate;
     const effectiveStart = parseLocalDate(effectiveStartStr);
 
-    // Normalizar inicio y fin a UTC para una iteracion segura sin saltos de zona horaria
     const currentIterDate = new Date(Date.UTC(effectiveStart.getFullYear(), effectiveStart.getMonth(), effectiveStart.getDate()));
     const endUTC = new Date(Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()));
 
     while (currentIterDate <= endUTC) {
       const dateStr = currentIterDate.toISOString().split('T')[0];
       const dayOfWeek = currentIterDate.getUTCDay();
-      // Si el empleado ingresó despues de la fecha que estamos evaluando, ignorar.
+
       if (fechaIngresoStr && dateStr < fechaIngresoStr) {
         currentIterDate.setUTCDate(currentIterDate.getUTCDate() + 1);
         continue;
       }
 
+      // Resolver horario (fijo o rotativo)
+      let horario = empleado.horarios;
+      if (empleado.rotacionid && empleado.rotaciones) {
+        const fi = empleado.rotaciones.fechainicio;
+        const fiUTC = Date.UTC(fi.getUTCFullYear(), fi.getUTCMonth(), fi.getUTCDate());
+        const diffTime = currentIterDate.getTime() - fiUTC;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0) {
+          const semanasDesdeInicio = Math.floor(diffDays / 7);
+          const semanaActual = (semanasDesdeInicio % empleado.rotaciones.ciclosemanas) + 1;
+          const turnoActivo = empleado.rotaciones.turnos.find((t: any) => t.semana === semanaActual);
+          if (turnoActivo && turnoActivo.horarios) {
+            horario = turnoActivo.horarios;
+          }
+        }
+      }
+
+      if (!horario) {
+        currentIterDate.setUTCDate(currentIterDate.getUTCDate() + 1);
+        continue;
+      }
+
+      // Determinar si es día laborable
       const dayMap: Record<string, number> = {
         'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'jueves': 4, 'viernes': 5, 'sabado': 6
       };
-
       const laborableDays = horario.diassemana.toLowerCase().split(',').map((d: string) => dayMap[d.trim()]);
       const isLaborable = laborableDays.includes(dayOfWeek);
 
-      // Filtrar fichadas: comparar con el dateStr (YYYY-MM-DD)
+      // Determinar si es domingo o feriado
+      const esDomingo = dayOfWeek === 0;
+      const esFeriado = feriadosSet.has(dateStr);
+      const esDomingoOFeriado = esDomingo || esFeriado;
+
+      // Filtrar fichadas del día
       const fichadasDelDia = fichadas.filter(f => {
-        // Al usar local-as-UTC, el timestamp ya tiene los componentes "locales" en sus getters UTC
         const fDateStr = f.timestamp.toISOString().split('T')[0];
         return fDateStr === dateStr;
       });
 
-      const resultado = InterpretationService.analizarJornada(isLaborable, fichadasDelDia, horario);
+      // Ejecutar motor de interpretación
+      const resultado = InterpretationService.analizarJornada(
+        isLaborable, fichadasDelDia, horario, esDomingoOFeriado, reglas
+      );
 
+      // Generar novedades según el resultado
       if (resultado.ausencia) {
         detectedNovelties.push({
           empleadoid: empleado.id,
           tipo: 'ausencia_injustificada',
           fechasafectadas: dateStr,
           cantidad: 1,
-          unidad: 'día',
-          estado: 'pendiente',
+          unidad: 'dias',
+          estado: reglas.ausencia_auto_estado,
           origen: 'automatica',
-          periodo: periodo,
+          periodo,
           observacion: 'Ausencia detectada automáticamente.'
         });
       } else {
+        // Tardanza
         if (resultado.tardanza) {
           detectedNovelties.push({
             empleadoid: empleado.id,
@@ -120,44 +202,88 @@ export const processInterpretation = async (req: Request, res: Response) => {
             unidad: 'minutos',
             estado: 'pendiente',
             origen: 'automatica',
-            periodo: periodo,
+            periodo,
             observacion: `Tardanza detectada: ${resultado.minutosTardanza} min.`
           });
         }
+
+        // Horas extra (50% o 100% según el día)
         if (resultado.horasExtra > 0) {
           detectedNovelties.push({
             empleadoid: empleado.id,
-            tipo: 'horas_extra_100', // Por defecto 100 en interpretación automática simple
+            tipo: resultado.tipoHorasExtra,
             fechasafectadas: dateStr,
             cantidad: resultado.horasExtra,
             unidad: 'minutos',
             estado: 'pendiente',
             origen: 'automatica',
-            periodo: periodo,
-            observacion: `Horas extra detectadas: ${resultado.horasExtra} min.`
+            periodo,
+            observacion: `Horas extra detectadas (${resultado.tipoHorasExtra === 'horas_extra_100' ? '100%' : '50%'}): ${resultado.horasExtra} min.${esFeriado ? ' (Feriado)' : esDomingo ? ' (Domingo)' : ''}`
+          });
+        }
+
+        // Salida anticipada
+        if (resultado.salidaAnticipada) {
+          detectedNovelties.push({
+            empleadoid: empleado.id,
+            tipo: 'salida_anticipada',
+            fechasafectadas: dateStr,
+            cantidad: resultado.minutosSalidaAnticipada,
+            unidad: 'minutos',
+            estado: 'pendiente',
+            origen: 'automatica',
+            periodo,
+            observacion: `Salida anticipada: ${resultado.minutosSalidaAnticipada} min antes del horario.`
+          });
+        }
+
+        // Dobles fichadas (anomalías)
+        for (const doble of resultado.dobleFichadas) {
+          detectedNovelties.push({
+            empleadoid: empleado.id,
+            tipo: 'doble_fichada',
+            fechasafectadas: dateStr,
+            cantidad: 1,
+            unidad: 'dias',
+            estado: 'pendiente',
+            origen: 'automatica',
+            periodo,
+            observacion: `Doble fichada de ${doble.tipo} detectada. Requiere resolución manual.`
+          });
+        }
+
+        // Descanso no tomado
+        if (resultado.descansoNoTomado) {
+          detectedNovelties.push({
+            empleadoid: empleado.id,
+            tipo: 'descanso_no_tomado',
+            fechasafectadas: dateStr,
+            cantidad: horario.minutosmindescanso,
+            unidad: 'minutos',
+            estado: 'pendiente',
+            origen: 'automatica',
+            periodo,
+            observacion: `Descanso mínimo de ${horario.minutosmindescanso} min no registrado.`
           });
         }
       }
+
       currentIterDate.setUTCDate(currentIterDate.getUTCDate() + 1);
     }
 
-    // 5. Persistir novedades detectadas de forma atómica y evitando duplicados
+    // 6. Persistir novedades detectadas de forma atómica
     try {
-      // Borrar automáticas previas y crear las nuevas en una transacción.
-      // Usamos createMany con skipDuplicates: true para que, si por alguna razón
-      // se reciben llamadas concurrentes, la BD evite duplicados (requiere
-      // índice único compuesto en el modelo `novedades`).
       await prisma.$transaction([
         prisma.novedades.deleteMany({
           where: {
             empleadoid: Number(empleadoId),
             origen: 'automatica',
             periodo: {
-              startsWith: periodo.substring(0, 7) // Asegura borrar todo el mes/año
+              startsWith: periodo.substring(0, 7)
             }
           }
         }),
-        prisma.novedades.createMany({ data: detectedNovelties as any[], skipDuplicates: true })
+        prisma.novedades.createMany({ data: detectedNovelties, skipDuplicates: true })
       ]);
     } catch (dbErr) {
       console.error('[Interpretación] Error al persistir novedades en transacción:', dbErr);

@@ -7,9 +7,13 @@ import { EmpleadosPage } from './pages/empleados/EmpleadosPage';
 import { EmpleadoForm } from './pages/empleados/EmpleadoForm';
 import { HorariosPage } from './pages/horarios/HorariosPage';
 import { HorarioForm } from './pages/horarios/HorarioForm';
+import { RotacionesPage } from './pages/rotaciones/RotacionesPage';
+import { RotacionForm } from './pages/rotaciones/RotacionForm';
 import { FichadasPage } from './pages/fichadas/FichadasPage';
 import { NovedadesPage } from './pages/novedades/NovedadesPage';
 import { CierrePage } from './pages/cierre/CierrePage';
+import { FeriadosPage } from './pages/feriados/FeriadosPage';
+import { ReglasPage } from './pages/reglas/ReglasPage';
 
 function App() {
   return (
@@ -26,22 +30,15 @@ function App() {
             <Route path="horarios" element={<HorariosPage />} />
             <Route path="horarios/nuevo" element={<HorarioForm />} />
             <Route path="horarios/:id" element={<HorarioForm />} />
+            <Route path="rotaciones" element={<RotacionesPage />} />
+            <Route path="rotaciones/nuevo" element={<RotacionForm />} />
+            <Route path="rotaciones/:id" element={<RotacionForm />} />
             <Route path="fichadas" element={<FichadasPage />} />
             <Route path="novedades" element={<NovedadesPage />} />
             <Route path="cierre" element={<CierrePage />} />
-            <Route path="configuracion" element={
-              <div className="animate-fade-in">
-                <div className="card">
-                  <div className="card-header"><h3 className="card-title">Configuración</h3></div>
-                  <div className="card-body">
-                    <div className="empty-state">
-                      <div className="empty-state-title">Próximamente</div>
-                      <div className="empty-state-text">La sección de configuración estará disponible en la próxima versión.</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            } />
+            <Route path="cierres" element={<CierrePage />} />
+            <Route path="feriados" element={<FeriadosPage />} />
+            <Route path="reglas" element={<ReglasPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

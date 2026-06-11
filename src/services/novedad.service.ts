@@ -16,5 +16,19 @@ export const novedadService = {
       method: 'POST',
       body: JSON.stringify({ empleadoId, startDate, endDate }),
     });
+  },
+
+  create: async (data: any): Promise<Novedad> => {
+    return fetchApi('/novedades', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateEstado: async (id: number, estado: 'aprobada' | 'rechazada' | 'pendiente'): Promise<Novedad> => {
+    return fetchApi(`/novedades/${id}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    });
   }
 };

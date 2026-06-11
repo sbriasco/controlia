@@ -2,6 +2,23 @@ import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { mapFromPrismaHorario } from './horarios.controller';
 
+const mapFromPrismaRotacion = (r: any) => {
+  if (!r) return r;
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    cicloSemanas: r.ciclosemanas,
+    fechaInicio: r.fechainicio,
+    turnos: r.turnos ? r.turnos.map((t: any) => ({
+      id: t.id,
+      rotacionId: t.rotacionid,
+      semana: t.semana,
+      horarioId: t.horarioid,
+      horarios: t.horarios ? mapFromPrismaHorario(t.horarios) : undefined
+    })) : []
+  };
+};
+
 const mapToPrismaEmpleado = (data: any) => {
   const mapped: any = {};
   if (data.legajo !== undefined) mapped.legajo = data.legajo;
@@ -13,7 +30,8 @@ const mapToPrismaEmpleado = (data: any) => {
   if (data.categoriaLaboral !== undefined) mapped.categorialaboral = data.categoriaLaboral;
   if (data.convenio !== undefined) mapped.convenio = data.convenio;
   if (data.tipoJornada !== undefined) mapped.tipojornada = data.tipoJornada;
-  if (data.horarioId !== undefined) mapped.horarioid = data.horarioId;
+  if (data.horarioId !== undefined) mapped.horarioid = data.horarioId === 0 ? null : data.horarioId;
+  if (data.rotacionId !== undefined) mapped.rotacionid = data.rotacionId === 0 ? null : data.rotacionId;
   if (data.diasDescanso !== undefined) {
     mapped.diasdescanso = Array.isArray(data.diasDescanso) ? data.diasDescanso.join(',') : data.diasDescanso;
   }
@@ -39,7 +57,9 @@ const mapFromPrismaEmpleado = (p: any) => {
     diasDescanso: p.diasdescanso ? p.diasdescanso.split(',') : [],
     modalidadFichada: p.modalidadfichada,
     estado: p.estado,
-    horarios: p.horarios ? mapFromPrismaHorario(p.horarios) : undefined
+    horarios: p.horarios ? mapFromPrismaHorario(p.horarios) : undefined,
+    rotacionId: p.rotacionid,
+    rotacion: p.rotaciones ? mapFromPrismaRotacion(p.rotaciones) : undefined
   };
 };
 
@@ -48,6 +68,11 @@ export const getEmpleados = async (req: Request, res: Response) => {
     const empleados = await prisma.empleados.findMany({
       include: {
         horarios: true,
+        rotaciones: {
+          include: {
+            turnos: { include: { horarios: true }, orderBy: { semana: 'asc' } }
+          }
+        }
       },
       orderBy: { apellido: 'asc' },
     });
@@ -64,6 +89,11 @@ export const getEmpleadoById = async (req: Request, res: Response) => {
       where: { id: Number(id) },
       include: {
         horarios: true,
+        rotaciones: {
+          include: {
+            turnos: { include: { horarios: true }, orderBy: { semana: 'asc' } }
+          }
+        }
       },
     });
     if (!empleado) {
@@ -95,7 +125,10 @@ export const createEmpleado = async (req: Request, res: Response) => {
     const nuevoEmpleado = await prisma.empleados.create({
       data: mapToPrismaEmpleado(data),
       include: {
-        horarios: true
+        horarios: true,
+        rotaciones: {
+          include: { turnos: { include: { horarios: true }, orderBy: { semana: 'asc' } } }
+        }
       }
     });
     res.status(201).json(mapFromPrismaEmpleado(nuevoEmpleado));
@@ -113,7 +146,10 @@ export const updateEmpleado = async (req: Request, res: Response) => {
       where: { id: Number(id) },
       data: mapToPrismaEmpleado(data),
       include: {
-        horarios: true
+        horarios: true,
+        rotaciones: {
+          include: { turnos: { include: { horarios: true }, orderBy: { semana: 'asc' } } }
+        }
       }
     });
     res.json(mapFromPrismaEmpleado(empleadoActualizado));
