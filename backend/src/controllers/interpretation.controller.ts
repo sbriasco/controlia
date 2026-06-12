@@ -123,6 +123,29 @@ export const processInterpretation = async (req: Request, res: Response) => {
       orderBy: { timestamp: 'asc' }
     });
 
+    // 4.5 Obtener Novedades Aprobadas de Ausencia para evitar generar anomalías encima
+    const TIPOS_JUSTIFICADA = [
+      'ausencia_justificada', 'licencia_enfermedad', 'licencia_examen',
+      'vacaciones', 'permiso_especial'
+    ];
+    const novedadesAprobadas = await prisma.novedades.findMany({
+      where: {
+        empleadoid: Number(empleadoId),
+        estado: 'aprobada',
+        tipo: { in: TIPOS_JUSTIFICADA }
+      }
+    });
+
+    const fechasJustificadas = new Set<string>();
+    for (const n of novedadesAprobadas) {
+      if (n.fechasafectadas) {
+        const fArray = n.fechasafectadas.split(',').map((f: string) => f.trim());
+        for (const f of fArray) {
+          fechasJustificadas.add(f);
+        }
+      }
+    }
+
     // 5. Procesar día por día
     const detectedNovelties: any[] = [];
 
@@ -137,6 +160,12 @@ export const processInterpretation = async (req: Request, res: Response) => {
       const dayOfWeek = currentIterDate.getUTCDay();
 
       if (fechaIngresoStr && dateStr < fechaIngresoStr) {
+        currentIterDate.setUTCDate(currentIterDate.getUTCDate() + 1);
+        continue;
+      }
+
+      // Si el día ya está justificado por una novedad manual (ej. vacaciones), saltar interpretación
+      if (fechasJustificadas.has(dateStr)) {
         currentIterDate.setUTCDate(currentIterDate.getUTCDate() + 1);
         continue;
       }
