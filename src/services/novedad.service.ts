@@ -25,10 +25,10 @@ export const novedadService = {
     });
   },
 
-  updateEstado: async (id: number, estado: 'aprobada' | 'rechazada' | 'pendiente'): Promise<Novedad> => {
+  updateEstado: async (id: number, estado: 'aprobada' | 'rechazada' | 'pendiente', usuarioId?: number): Promise<Novedad> => {
     return fetchApi(`/novedades/${id}/estado`, {
       method: 'PATCH',
-      body: JSON.stringify({ estado }),
+      body: JSON.stringify({ estado, usuarioId }),
     });
   }
 };

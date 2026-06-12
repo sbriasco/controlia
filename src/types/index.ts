@@ -9,6 +9,8 @@ export interface User {
   id: number;
   nombre: string;
   rol: UserRole;
+  email?: string;
+  empleadoId?: number | null;
   avatar?: string;
 }
 
@@ -120,6 +122,9 @@ export interface Novedad {
   origen: OrigenNovedad;
   observacion?: string;
   periodo: string;           // YYYY-MM
+  usuarioAccionId?: number | null;
+  fechaAccion?: string | null;
+  usuarioAccion?: { id: number; nombre: string } | null;
 }
 
 // ── Cierre Mensual ──

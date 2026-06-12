@@ -1,41 +1,31 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, User, BarChart3, ChevronRight, Clock, FileText, CheckCircle } from 'lucide-react';
+import { Shield, User, BarChart3, ChevronRight, Clock, FileText, CheckCircle, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../../components/ui/Logo';
-import type { UserRole } from '../../types';
 import './LoginPage.css';
-
-const roles: { role: UserRole; name: string; description: string; icon: React.ReactNode; colorClass: string }[] = [
-  {
-    role: 'admin',
-    name: 'Administrador',
-    description: 'Gestión completa del sistema: empleados, fichadas, novedades y cierre mensual',
-    icon: <Shield size={24} />,
-    colorClass: 'admin',
-  },
-  {
-    role: 'empleado',
-    name: 'Empleado',
-    description: 'Registrar fichadas, consultar asistencias y ver novedades personales',
-    icon: <User size={24} />,
-    colorClass: 'empleado',
-  },
-  {
-    role: 'contador',
-    name: 'Contador Externo',
-    description: 'Acceder a resúmenes de preliquidación y exportar informes del período',
-    icon: <BarChart3 size={24} />,
-    colorClass: 'contador',
-  },
-];
 
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (role: UserRole) => {
-    login(role);
-    navigate('/dashboard');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    try {
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión. Verifique sus credenciales.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -48,26 +38,59 @@ export function LoginPage() {
 
           <h1 className="login-heading">Bienvenido</h1>
           <p className="login-subheading">
-            Seleccioná tu rol para ingresar al sistema
+            Iniciá sesión para ingresar al sistema
           </p>
 
-          <div className="login-roles">
-            {roles.map((r) => (
-              <div
-                key={r.role}
-                className="role-card"
-                onClick={() => handleLogin(r.role)}
-                id={`login-role-${r.role}`}
-              >
-                <div className={`role-icon ${r.colorClass}`}>{r.icon}</div>
-                <div className="role-info">
-                  <div className="role-name">{r.name}</div>
-                  <div className="role-desc">{r.description}</div>
-                </div>
-                <ChevronRight size={20} className="role-arrow" />
+          <form className="login-form" onSubmit={handleSubmit}>
+            {error && (
+              <div style={{ backgroundColor: 'var(--rojo-light)', color: 'var(--rojo)', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.875rem' }}>
+                {error}
               </div>
-            ))}
-          </div>
+            )}
+            
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                className="form-control"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ejemplo@controlia.com"
+                required
+              />
+            </div>
+
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label>Contraseña</label>
+              <input
+                type="password"
+                className="form-control"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Ingresá tu contraseña"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '24px', padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Iniciando sesión...' : 'Ingresar al Sistema'}
+              {!isLoading && <LogIn size={18} />}
+            </button>
+            
+            <div style={{ marginTop: '24px', fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+              <p>Usuarios de prueba:</p>
+              <ul style={{ listStyle: 'none', padding: 0, marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li>admin@controlia.com / admin123</li>
+                <li>maria.gomez@controlia.com / empleado123</li>
+                <li>contador@controlia.com / contador123</li>
+              </ul>
+            </div>
+          </form>
         </div>
       </div>
 

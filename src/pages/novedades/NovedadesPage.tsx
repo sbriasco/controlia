@@ -101,8 +101,8 @@ export function NovedadesPage() {
 
   const handleUpdateEstado = async (id: number, estado: 'aprobada' | 'rechazada' | 'pendiente') => {
     try {
-      await novedadService.updateEstado(id, estado);
-      setNovedades(prev => prev.map(n => n.id === id ? { ...n, estado } : n));
+      const res = await novedadService.updateEstado(id, estado, user?.id);
+      setNovedades(prev => prev.map(n => n.id === id ? res : n));
     } catch (err: any) {
       alert('Error al actualizar estado: ' + err.message);
     }
@@ -289,6 +289,7 @@ export function NovedadesPage() {
                     <th>Origen</th>
                     <th>Estado</th>
                     <th>Observación</th>
+                    {isAdmin && <th>Revisado por</th>}
                     {isAdmin && <th>Acciones</th>}
                   </tr>
                 </thead>
@@ -337,6 +338,17 @@ export function NovedadesPage() {
                         <td style={{ fontSize: '12px', color: 'var(--gris-texto)', maxWidth: '200px' }}>
                           <span className="truncate" style={{ display: 'block' }}>{n.observacion || '—'}</span>
                         </td>
+                        {isAdmin && (
+                          <td style={{ fontSize: '12px', color: 'var(--gris-texto)' }}>
+                            {n.usuarioAccion ? (
+                              <>
+                                <span style={{ fontWeight: 500, color: 'var(--text-h)' }}>{n.usuarioAccion.nombre}</span>
+                                <br />
+                                {n.fechaAccion ? new Date(n.fechaAccion).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                              </>
+                            ) : '—'}
+                          </td>
+                        )}
                         {isAdmin && (
                           <td>
                             {n.estado === 'pendiente' ? (

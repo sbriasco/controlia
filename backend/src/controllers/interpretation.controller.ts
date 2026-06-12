@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { InterpretationService, ReglasConfig } from '../services/interpretation.service';
 import { getReglasMap } from './reglas.controller';
+import { isPeriodoCerrado } from '../utils/periodo-cerrado';
 
 // Valores por defecto para las reglas (si no existen en la DB)
 const REGLAS_DEFAULTS: ReglasConfig = {
@@ -55,6 +56,14 @@ export const processInterpretation = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Faltan parámetros requeridos: empleadoId, startDate, endDate' });
     }
 
+    // Preparar periodo
+    const periodo = startDate.substring(0, 7);
+
+    // Guard: verificar si el período está cerrado
+    if (await isPeriodoCerrado(periodo)) {
+      return res.status(400).json({ message: 'No se puede reprocesar la interpretación de un período cerrado' });
+    }
+
     // Parsear fechas como locales (no como UTC)
     const parseLocalDate = (dateStr: string): Date => {
       const [year, month, day] = dateStr.split('-').map(Number);
@@ -93,8 +102,7 @@ export const processInterpretation = async (req: Request, res: Response) => {
     const reglas = await loadReglas();
     const feriadosSet = await loadFeriadosSet(startDate, endDate);
 
-    // 3. Preparar periodo y fecha de ingreso del empleado
-    const periodo = startDate.substring(0, 7);
+    // 3. Preparar fecha de ingreso del empleado
 
     const formatUTCDate = (date: Date): string => {
       const y = date.getUTCFullYear();

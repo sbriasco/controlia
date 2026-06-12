@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
+import { isPeriodoCerrado } from '../utils/periodo-cerrado';
 
 export const getNovedades = async (req: Request, res: Response) => {
   try {
@@ -11,6 +12,11 @@ export const getNovedades = async (req: Request, res: Response) => {
 
     const novedades = await prisma.novedades.findMany({
       where,
+      include: {
+        usuarios: {
+          select: { id: true, nombre: true }
+        }
+      },
       orderBy: { fechasafectadas: 'desc' }
     });
 
@@ -24,7 +30,10 @@ export const getNovedades = async (req: Request, res: Response) => {
       estado: n.estado,
       origen: n.origen,
       observacion: n.observacion,
-      periodo: n.periodo
+      periodo: n.periodo,
+      usuarioAccionId: n.usuarioaccionid ?? null,
+      fechaAccion: n.fechaaccion ?? null,
+      usuarioAccion: n.usuarios ? { id: n.usuarios.id, nombre: n.usuarios.nombre } : null
     })));
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener novedades', error });
@@ -42,6 +51,11 @@ export const createNovedad = async (req: Request, res: Response) => {
     // Calcular periodo usando la primera fecha
     const primeraFecha = fechas[0];
     const periodo = primeraFecha.substring(0, 7); // YYYY-MM
+
+    // Guard: verificar si el período está cerrado
+    if (await isPeriodoCerrado(periodo)) {
+      return res.status(400).json({ message: 'No se pueden crear novedades en un período cerrado' });
+    }
     
     // Calcular cantidad y unidad. Simplificado: 1 dia por fecha.
     const cantidad = fechas.length;
@@ -71,25 +85,43 @@ export const createNovedad = async (req: Request, res: Response) => {
       estado: nuevaNovedad.estado,
       origen: nuevaNovedad.origen,
       observacion: nuevaNovedad.observacion,
-      periodo: nuevaNovedad.periodo
+      periodo: nuevaNovedad.periodo,
+      usuarioAccionId: nuevaNovedad.usuarioaccionid ?? null,
+      fechaAccion: nuevaNovedad.fechaaccion ?? null,
+      usuarioAccion: null
     });
   } catch (error) {
     res.status(500).json({ message: 'Error al crear novedad', error });
   }
 };
 
-export const updateEstadoNovedad = async (req: Request, res: Response) => {
+  export const updateEstadoNovedad = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
+    const { estado, usuarioId } = req.body;
 
     if (!['pendiente', 'aprobada', 'rechazada'].includes(estado)) {
       return res.status(400).json({ message: 'Estado inválido' });
     }
 
+    // Guard: verificar si el período está cerrado
+    const novedad = await prisma.novedades.findUnique({ where: { id: Number(id) } });
+    if (novedad && await isPeriodoCerrado(novedad.periodo)) {
+      return res.status(400).json({ message: 'No se pueden modificar novedades de un período cerrado' });
+    }
+
     const novedadActualizada = await prisma.novedades.update({
       where: { id: Number(id) },
-      data: { estado }
+      data: { 
+        estado,
+        usuarioaccionid: estado === 'pendiente' ? null : (usuarioId ? Number(usuarioId) : null),
+        fechaaccion: estado === 'pendiente' ? null : new Date(),
+      },
+      include: {
+        usuarios: {
+          select: { id: true, nombre: true }
+        }
+      }
     });
 
     res.json({
@@ -102,7 +134,10 @@ export const updateEstadoNovedad = async (req: Request, res: Response) => {
       estado: novedadActualizada.estado,
       origen: novedadActualizada.origen,
       observacion: novedadActualizada.observacion,
-      periodo: novedadActualizada.periodo
+      periodo: novedadActualizada.periodo,
+      usuarioAccionId: novedadActualizada.usuarioaccionid ?? null,
+      fechaAccion: novedadActualizada.fechaaccion ?? null,
+      usuarioAccion: novedadActualizada.usuarios ? { id: novedadActualizada.usuarios.id, nombre: novedadActualizada.usuarios.nombre } : null
     });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar estado', error });

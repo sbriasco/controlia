@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
+import { isPeriodoCerrado } from '../utils/periodo-cerrado';
 
 // ── Mappers ────────────────────────────────────────────────────
 
@@ -94,6 +95,13 @@ export const createFichada = async (req: Request, res: Response) => {
   try {
     const data = req.body;
 
+    // Guard: verificar si el período está cerrado
+    const ts = new Date(data.timestamp);
+    const periodo = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}`;
+    if (await isPeriodoCerrado(periodo)) {
+      return res.status(400).json({ message: 'No se pueden registrar fichadas en un período cerrado' });
+    }
+
     // Verificar que el empleado existe y está activo
     const empleado = await prisma.empleados.findUnique({
       where: { id: data.empleadoId },
@@ -159,6 +167,12 @@ export const deleteFichada = async (req: Request, res: Response) => {
       return res.status(400).json({
         message: 'Solo se pueden eliminar fichadas de origen manual. Las demás son inmutables.',
       });
+    }
+
+    // Guard: verificar si el período está cerrado
+    const periodo = `${fichada.timestamp.getFullYear()}-${String(fichada.timestamp.getMonth() + 1).padStart(2, '0')}`;
+    if (await isPeriodoCerrado(periodo)) {
+      return res.status(400).json({ message: 'No se pueden eliminar fichadas de un período cerrado' });
     }
 
     await prisma.fichadas.delete({ where: { id: Number(id) } });

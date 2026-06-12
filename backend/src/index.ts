@@ -9,6 +9,8 @@ import novedadesRoutes from './routes/novedades.routes';
 import rotacionesRoutes from './routes/rotaciones.routes';
 import feriadosRoutes from './routes/feriados.routes';
 import reglasRoutes from './routes/reglas.routes';
+import authRoutes from './routes/auth.routes';
+import cierreRoutes from './routes/cierre.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -34,6 +36,8 @@ app.use('/api/novedades', novedadesRoutes);
 app.use('/api/rotaciones', rotacionesRoutes);
 app.use('/api/feriados', feriadosRoutes);
 app.use('/api/reglas', reglasRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/cierres', cierreRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Controlia Backend API V1 - Funcionando' });

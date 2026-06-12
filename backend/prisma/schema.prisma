@@ -118,7 +118,10 @@ model novedades {
   origen          String    @db.VarChar(50)
   observacion     String?
   periodo         String    @db.VarChar(20)
+  usuarioaccionid Int?
+  fechaaccion     DateTime? @db.Timestamp(6)
   empleados       empleados @relation(fields: [empleadoid], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuarios        usuarios? @relation(fields: [usuarioaccionid], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@unique([empleadoid, tipo, fechasafectadas, origen, periodo])
 }
 
@@ -131,6 +134,7 @@ model usuarios {
   empleadoid       Int?
   cierresmensuales cierresmensuales[]
   fichadas         fichadas[]
+  novedades        novedades[]
   empleados        empleados?         @relation(fields: [empleadoid], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
