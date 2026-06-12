@@ -120,14 +120,22 @@ export const consolidarPeriodo = async (req: Request, res: Response) => {
       }
     });
 
-    // Calcular rango de fechas del período
+    // Calcular rango de fechas del período limitando hasta HOY
     const [year, month] = periodo.split('-').map(Number);
     const startDate = new Date(Date.UTC(year, month - 1, 1));
-    const endDate = new Date(Date.UTC(year, month, 0)); // último día del mes
+    const endOfMonth = new Date(Date.UTC(year, month, 0)); // último día del mes
+    
+    // Si el período es el actual, no podemos contar días futuros como trabajados
+    const hoyUTC = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
+    const endDate = endOfMonth > hoyUTC ? hoyUTC : endOfMonth;
 
-    // Obtener todas las novedades aprobadas del período
+    // Obtener todas las novedades relevantes (aprobadas y pendientes)
+    // Las pendientes también se restan/suman en el borrador para reflejar la realidad hasta que se rechacen
     const novedadesAprobadas = await prisma.novedades.findMany({
-      where: { periodo, estado: 'aprobada' }
+      where: { 
+        periodo, 
+        estado: { in: ['aprobada', 'pendiente'] } 
+      }
     });
 
     // Construir mapa de novedades por empleado
