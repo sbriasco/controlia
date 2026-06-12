@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, User, BarChart3, ChevronRight, Clock, FileText, CheckCircle, LogIn } from 'lucide-react';
+import { Clock, FileText, CheckCircle, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../../components/ui/Logo';
 import './LoginPage.css';

@@ -135,6 +135,7 @@ export interface CierreMensual {
   periodo: string;           // YYYY-MM
   fechaCierre?: string;
   usuarioCierre?: number;
+  usuarioNombre?: string;
   estado: EstadoCierre;
   resumenEmpleados: ResumenEmpleado[];
 }
