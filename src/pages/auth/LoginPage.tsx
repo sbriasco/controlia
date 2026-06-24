@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, FileText, CheckCircle, LogIn } from 'lucide-react';
+import { Clock, FileText, CheckCircle, LogIn, Mail, Lock, Eye, EyeOff, Info } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../../components/ui/Logo';
 import './LoginPage.css';
@@ -12,6 +12,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +27,11 @@ export function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleTestUserClick = (testEmail: string, testPass: string) => {
+    setEmail(testEmail);
+    setPassword(testPass);
   };
 
   return (
@@ -49,45 +55,79 @@ export function LoginPage() {
             )}
             
             <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                className="form-control"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ejemplo@controlia.com"
-                required
-              />
+              <label className="form-label-custom">Email</label>
+              <div className="input-with-icon">
+                <Mail className="input-icon" size={18} />
+                <input
+                  type="email"
+                  className="form-input-custom"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ejemplo@controlia.com"
+                  required
+                />
+              </div>
             </div>
 
             <div className="form-group" style={{ marginTop: '16px' }}>
-              <label>Contraseña</label>
-              <input
-                type="password"
-                className="form-control"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Ingresá tu contraseña"
-                required
-              />
+              <label className="form-label-custom">Contraseña</label>
+              <div className="input-with-icon">
+                <Lock className="input-icon" size={18} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input-custom"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Ingresá tu contraseña"
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
-              className="btn btn-primary"
-              style={{ width: '100%', marginTop: '24px', padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              className="login-submit-btn"
               disabled={isLoading}
             >
               {isLoading ? 'Iniciando sesión...' : 'Ingresar al Sistema'}
               {!isLoading && <LogIn size={18} />}
             </button>
             
-            <div style={{ marginTop: '24px', fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-              <p>Usuarios de prueba:</p>
-              <ul style={{ listStyle: 'none', padding: 0, marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <li>admin@controlia.com / admin123</li>
-                <li>maria.gomez@controlia.com / empleado123</li>
-                <li>contador@controlia.com / contador123</li>
+            <div className="test-users-box">
+              <div className="test-users-title">
+                <Info size={16} />
+                <span>Usuarios de prueba (Clic para rellenar)</span>
+              </div>
+              <ul className="test-users-list">
+                <li 
+                  className="test-users-item" 
+                  onClick={() => handleTestUserClick('admin@controlia.com', 'admin123')}
+                >
+                  <span>Administrador</span>
+                  <span className="test-user-credentials">admin@controlia.com</span>
+                </li>
+                <li 
+                  className="test-users-item" 
+                  onClick={() => handleTestUserClick('maria.gomez@controlia.com', 'empleado123')}
+                >
+                  <span>Empleado</span>
+                  <span className="test-user-credentials">maria.gomez@controlia.com</span>
+                </li>
+                <li 
+                  className="test-users-item" 
+                  onClick={() => handleTestUserClick('contador@controlia.com', 'contador123')}
+                >
+                  <span>Contador</span>
+                  <span className="test-user-credentials">contador@controlia.com</span>
+                </li>
               </ul>
             </div>
           </form>

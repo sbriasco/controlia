@@ -163,20 +163,22 @@ export const FeriadosPage: React.FC = () => {
                     </span>
                   </td>
                   <td>
-                    <div className="action-buttons">
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <button 
-                        className="btn-icon text-blue-600 hover:bg-blue-50" 
+                        className="btn btn-ghost btn-sm" 
+                        style={{ color: 'var(--azul-principal)', minWidth: 'auto', padding: '4px 8px', height: '32px' }}
                         title="Editar"
                         onClick={() => handleOpenModal(feriado)}
                       >
-                        <Edit2 size={18} />
+                        <Edit2 size={16} />
                       </button>
                       <button 
-                        className="btn-icon text-red-600 hover:bg-red-50" 
+                        className="btn btn-ghost btn-sm" 
+                        style={{ color: 'var(--rojo)', minWidth: 'auto', padding: '4px 8px', height: '32px' }}
                         title="Eliminar"
                         onClick={() => handleDelete(feriado.id)}
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>
@@ -188,52 +190,54 @@ export const FeriadosPage: React.FC = () => {
       </div>
 
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editingFeriado ? 'Editar Feriado' : 'Nuevo Feriado'}</h2>
-              <button className="btn-icon" onClick={() => setIsModalOpen(false)}>✕</button>
+              <h3 className="modal-title">{editingFeriado ? 'Editar Feriado' : 'Nuevo Feriado'}</h3>
+              <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
             </div>
             
-            <form onSubmit={handleSubmit} className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Fecha</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  required
-                  value={formData.fecha}
-                  onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                />
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Fecha</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    required
+                    value={formData.fecha}
+                    onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label className="form-label">Descripción</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="Ej: Día del Trabajador"
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label className="form-label">Tipo</label>
+                  <select
+                    className="form-select"
+                    value={formData.tipo}
+                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                  >
+                    <option value="nacional">Nacional</option>
+                    <option value="provincial">Provincial</option>
+                    <option value="empresa">Día de la Empresa</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Descripción</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  placeholder="Ej: Día del Trabajador"
-                  value={formData.descripcion}
-                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Tipo</label>
-                <select
-                  className="form-select"
-                  value={formData.tipo}
-                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                >
-                  <option value="nacional">Nacional</option>
-                  <option value="provincial">Provincial</option>
-                  <option value="empresa">Día de la Empresa</option>
-                </select>
-              </div>
-
-              <div className="modal-footer" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-primary">

@@ -23,6 +23,7 @@ export function HorarioForm() {
     umbralHorasExtra: 30,
   });
 
+  const [horasRequeridas, setHorasRequeridas] = useState<number>(8);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +33,15 @@ export function HorarioForm() {
       horarioService.getById(Number(id))
         .then(data => {
           setFormData(data);
+          
+          // Si es flexible, calcular las horas requeridas a partir de las horas configuradas
+          if (data.tipo === 'flexible') {
+            const [entH] = data.horaEntrada.split(':').map(Number);
+            const [salH] = data.horaSalida.split(':').map(Number);
+            let diffHours = salH - entH;
+            if (diffHours < 0) diffHours += 24;
+            setHorasRequeridas(diffHours || 8);
+          }
         })
         .catch(err => {
           console.error(err);
@@ -69,10 +79,22 @@ export function HorarioForm() {
     setLoading(true);
     setError(null);
 
-    // Si los descansos están vacíos, poner null o undefined (backend puede requerirlo null o vacío)
     const payload = { ...formData };
-    if (!payload.descansoInicio) payload.descansoInicio = undefined;
-    if (!payload.descansoFin) payload.descansoFin = undefined;
+    
+    // Si es flexible, computamos valores de forma inteligente y transparente para el motor de base de datos
+    if (payload.tipo === 'flexible') {
+      payload.horaEntrada = '09:00';
+      const salH = (9 + horasRequeridas) % 24;
+      payload.horaSalida = `${String(salH).padStart(2, '0')}:00`;
+      payload.toleranciaEntrada = 1440; // Evita falsas tardanzas en horario libre
+      payload.toleranciaSalida = 1440;   // Evita salidas anticipadas en horario libre
+      payload.descansoInicio = undefined;
+      payload.descansoFin = undefined;
+      payload.minutosMinDescanso = 0;
+    } else {
+      if (!payload.descansoInicio) payload.descansoInicio = undefined;
+      if (!payload.descansoFin) payload.descansoFin = undefined;
+    }
 
     try {
       if (isEditing) {
@@ -121,41 +143,62 @@ export function HorarioForm() {
               </select>
             </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Hora Entrada *</label>
-              <input required type="time" name="horaEntrada" value={formData.horaEntrada} onChange={handleChange} style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Hora Salida *</label>
-              <input required type="time" name="horaSalida" value={formData.horaSalida} onChange={handleChange} style={inputStyle} />
-            </div>
+            {formData.tipo === 'flexible' ? (
+              /* Configuración simplificada y limpia para Horario Flexible */
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ width: '50%', paddingRight: '7.5px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Horas Diarias Requeridas *</label>
+                  <input 
+                    required 
+                    type="number" 
+                    min="1" 
+                    max="24" 
+                    value={horasRequeridas} 
+                    onChange={(e) => setHorasRequeridas(Number(e.target.value))} 
+                    style={inputStyle} 
+                  />
+                </div>
+              </div>
+            ) : (
+              /* Campos tradicionales para otros horarios */
+              <>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Hora Entrada *</label>
+                  <input required type="time" name="horaEntrada" value={formData.horaEntrada} onChange={handleChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Hora Salida *</label>
+                  <input required type="time" name="horaSalida" value={formData.horaSalida} onChange={handleChange} style={inputStyle} />
+                </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Tolerancia Entrada (min)</label>
-              <input required type="number" name="toleranciaEntrada" value={formData.toleranciaEntrada} onChange={handleChange} style={inputStyle} min="0" />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Tolerancia Salida (min)</label>
-              <input required type="number" name="toleranciaSalida" value={formData.toleranciaSalida} onChange={handleChange} style={inputStyle} min="0" />
-            </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Tolerancia Entrada (min)</label>
+                  <input required type="number" name="toleranciaEntrada" value={formData.toleranciaEntrada} onChange={handleChange} style={inputStyle} min="0" />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Tolerancia Salida (min)</label>
+                  <input required type="number" name="toleranciaSalida" value={formData.toleranciaSalida} onChange={handleChange} style={inputStyle} min="0" />
+                </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Inicio Descanso</label>
-              <input type="time" name="descansoInicio" value={formData.descansoInicio || ''} onChange={handleChange} style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Fin Descanso</label>
-              <input type="time" name="descansoFin" value={formData.descansoFin || ''} onChange={handleChange} style={inputStyle} />
-            </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Inicio Descanso</label>
+                  <input type="time" name="descansoInicio" value={formData.descansoInicio || ''} onChange={handleChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Fin Descanso</label>
+                  <input type="time" name="descansoFin" value={formData.descansoFin || ''} onChange={handleChange} style={inputStyle} />
+                </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Descanso Mínimo (min)</label>
-              <input required type="number" name="minutosMinDescanso" value={formData.minutosMinDescanso} onChange={handleChange} style={inputStyle} min="0" />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Umbral Horas Extra (min)</label>
-              <input required type="number" name="umbralHorasExtra" value={formData.umbralHorasExtra} onChange={handleChange} style={inputStyle} min="0" />
-            </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Descanso Mínimo (min)</label>
+                  <input required type="number" name="minutosMinDescanso" value={formData.minutosMinDescanso} onChange={handleChange} style={inputStyle} min="0" />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: 500 }}>Umbral Horas Extra (min)</label>
+                  <input required type="number" name="umbralHorasExtra" value={formData.umbralHorasExtra} onChange={handleChange} style={inputStyle} min="0" />
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{ marginBottom: '30px' }}>

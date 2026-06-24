@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, FileBarChart, Download, ChevronRight, Loader2, RefreshCcw, Undo2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileBarChart, Download, ChevronRight, Loader2, RefreshCcw, Undo2, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../context/AuthContext';
 import { cierreService } from '../../services/cierre.service';
 import { empleadoService } from '../../services/empleado.service';
 import { novedadService } from '../../services/novedad.service';
 import type { Empleado, Novedad, CierreMensual } from '../../types';
+import './CierrePage.css';
 
 const periodoLabel = (periodo: string) => {
   if (!periodo) return '';
@@ -14,20 +15,36 @@ const periodoLabel = (periodo: string) => {
   return `${months[parseInt(month) - 1]} ${year}`;
 };
 
+const currentMonthStr = () => {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export function CierrePage() {
   const { user } = useAuth();
   const isAdmin = user?.rol === 'admin';
 
   const [cierres, setCierres] = useState<CierreMensual[]>([]);
-  const [selectedCierreId, setSelectedCierreId] = useState<number | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [selectedCierreData, setSelectedCierreData] = useState<CierreMensual | null>(null);
-  
-  const [nuevoPeriodo, setNuevoPeriodo] = useState('');
   
   const [novedades, setNovedades] = useState<Novedad[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // Inicializar listado de cierres
   useEffect(() => {
@@ -38,34 +55,45 @@ export function CierrePage() {
     try {
       const data = await cierreService.getAll();
       setCierres(data);
-      if (data.length > 0 && !selectedCierreId) {
-        setSelectedCierreId(data[0].id);
-      }
       
-      // Sugerir mes actual para consolidar
-      const hoy = new Date();
-      const sugerido = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
-      if (!data.find(c => c.periodo === sugerido)) {
-        setNuevoPeriodo(sugerido);
-      } else {
-        const proximo = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
-        setNuevoPeriodo(`${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, '0')}`);
+      const current = currentMonthStr();
+      if (!selectedPeriod) {
+        if (data.length > 0) {
+          // Si el mes actual ya tiene un cierre, lo seleccionamos, sino el más nuevo
+          const currentHasClosure = data.find(c => c.periodo === current);
+          if (currentHasClosure) {
+            setSelectedPeriod(current);
+          } else {
+            const sorted = [...data].sort((a, b) => b.periodo.localeCompare(a.periodo));
+            setSelectedPeriod(sorted[0].periodo);
+          }
+        } else {
+          setSelectedPeriod(current);
+        }
       }
     } catch (err) {
       console.error('Error cargando cierres', err);
     }
   };
 
-  // Cargar datos cuando se selecciona un cierre
+  // Cargar datos cuando se selecciona un periodo
   useEffect(() => {
-    if (!selectedCierreId) return;
+    if (!selectedPeriod) return;
+
+    const existingCierre = cierres.find(c => c.periodo === selectedPeriod);
+    if (!existingCierre) {
+      setSelectedCierreData(null);
+      setNovedades([]);
+      setLoading(false);
+      return;
+    }
 
     const fetchData = async () => {
       setLoading(true);
       try {
         const [cierreDetalle, novs, emps] = await Promise.all([
-          cierreService.getById(selectedCierreId),
-          novedadService.getAll({ periodo: cierres.find(c => c.id === selectedCierreId)?.periodo }),
+          cierreService.getById(existingCierre.id),
+          novedadService.getAll({ periodo: selectedPeriod }),
           empleadoService.getAll(),
         ]);
         setSelectedCierreData(cierreDetalle);
@@ -78,7 +106,7 @@ export function CierrePage() {
       }
     };
     fetchData();
-  }, [selectedCierreId, cierres]);
+  }, [selectedPeriod, cierres]);
 
   const handleConsolidar = async (periodoToConsolidate: string) => {
     if (!periodoToConsolidate) return;
@@ -86,10 +114,10 @@ export function CierrePage() {
     try {
       const nuevo = await cierreService.consolidar(periodoToConsolidate);
       await loadCierres();
-      setSelectedCierreId(nuevo.id);
-      alert('Período consolidado exitosamente. Revisá el borrador.');
+      setSelectedPeriod(nuevo.periodo);
+      showToast('Período consolidado exitosamente. Revisá el borrador.', 'success');
     } catch (err: any) {
-      alert('Error al consolidar: ' + err.message);
+      showToast('Error al consolidar: ' + err.message, 'error');
     } finally {
       setActionLoading(false);
     }
@@ -103,9 +131,9 @@ export function CierrePage() {
     try {
       await cierreService.cerrar(selectedCierreData.id, user.id);
       await loadCierres();
-      alert('Período cerrado definitivamente.');
+      showToast('Período cerrado definitivamente.', 'success');
     } catch (err: any) {
-      alert('Error al cerrar: ' + err.message);
+      showToast('Error al cerrar: ' + err.message, 'error');
     } finally {
       setActionLoading(false);
     }
@@ -119,16 +147,53 @@ export function CierrePage() {
     try {
       await cierreService.reabrir(selectedCierreData.id);
       await loadCierres();
-      alert('Período reabierto como borrador.');
+      showToast('Período reabierto como borrador.', 'success');
     } catch (err: any) {
-      alert('Error al reabrir: ' + err.message);
+      showToast('Error al reabrir: ' + err.message, 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
-  // -- Funciones de Exportación --
+  // Merge de cierres consolidados + candidato de Mayo 2026 en adelante para el selector
+  const getPeriodOptions = () => {
+    const optionsMap = new Map<string, { value: string; label: string; status?: 'cerrado' | 'borrador' }>();
+    
+    // 1. Agregar los meses candidatos desde Mayo 2026 hasta el mes actual
+    const startYear = 2026;
+    const startMonth = 5; // Mayo
+    const hoy = new Date();
+    const currentYear = hoy.getFullYear();
+    const currentMonth = hoy.getMonth() + 1;
 
+    let y = startYear;
+    let m = startMonth;
+    while (y < currentYear || (y === currentYear && m <= currentMonth)) {
+      const value = `${y}-${String(m).padStart(2, '0')}`;
+      optionsMap.set(value, {
+        value,
+        label: periodoLabel(value)
+      });
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+    
+    // 2. Sobrescribir o añadir desde el backend con sus respectivos estados reales
+    cierres.forEach(c => {
+      optionsMap.set(c.periodo, {
+        value: c.periodo,
+        label: `${periodoLabel(c.periodo)}`,
+        status: c.estado
+      });
+    });
+
+    return Array.from(optionsMap.values()).sort((a, b) => b.value.localeCompare(a.value));
+  };
+
+  // -- Funciones de Exportación --
   const getExportData = () => {
     if (!selectedCierreData?.resumenEmpleados) return [];
     return selectedCierreData.resumenEmpleados.map(re => {
@@ -170,176 +235,218 @@ export function CierrePage() {
   const pendingNovedades = novedades.filter((n) => n.estado === 'pendiente').length;
 
   return (
-    <div className="animate-fade-in">
-      {/* Header Selector */}
-      <div className="page-toolbar">
-        <div className="page-toolbar-left" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+    <div className="cierre-container">
+      {/* Header con Selector único de Período */}
+      <div className="cierre-header">
+        <div className="cierre-selector-section">
+          <label className="cierre-selector-label">Período Mensual:</label>
           <select 
-            className="form-control" 
-            style={{ width: '200px', fontWeight: 600 }}
-            value={selectedCierreId || ''}
-            onChange={(e) => setSelectedCierreId(Number(e.target.value))}
+            className="cierre-select" 
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
           >
-            {cierres.length === 0 && <option value="">No hay cierres</option>}
-            {cierres.map(c => (
-              <option key={c.id} value={c.id}>
-                {periodoLabel(c.periodo)} {c.estado === 'cerrado' ? '(Cerrado)' : '(Borrador)'}
+            {getPeriodOptions().map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label} {opt.status === 'cerrado' ? '✓' : opt.status === 'borrador' ? '⏳' : ''}
               </option>
             ))}
           </select>
-          
-          {isAdmin && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', borderLeft: '1px solid #ccc', paddingLeft: '16px' }}>
-              <input 
-                type="month" 
-                className="form-control" 
-                value={nuevoPeriodo} 
-                onChange={(e) => setNuevoPeriodo(e.target.value)}
-                style={{ padding: '6px' }}
-              />
-              <button 
-                className="btn btn-primary btn-sm" 
-                onClick={() => handleConsolidar(nuevoPeriodo)}
-                disabled={actionLoading || !nuevoPeriodo}
-              >
-                <RefreshCcw size={14} /> Consolidar Mes
-              </button>
-            </div>
-          )}
         </div>
 
-        {selectedCierreData && (
-          <div className="page-toolbar-right">
-            <span className={`badge badge-${selectedCierreData.estado}`}>
-              {selectedCierreData.estado === 'cerrado' ? '✓ Período Cerrado' : '⏳ En Borrador'}
-            </span>
+        {selectedPeriod && (
+          <div>
+            {!selectedCierreData ? (
+              <span className="cierre-status-badge unconsolidated">
+                ● Sin Consolidar
+              </span>
+            ) : selectedCierreData.estado === 'cerrado' ? (
+              <span className="cierre-status-badge cerrado">
+                ✓ Cerrado
+              </span>
+            ) : (
+              <span className="cierre-status-badge borrador">
+                ⏳ Borrador en Revisión
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {!selectedCierreId && cierres.length === 0 && !loading && (
-        <div className="card" style={{ padding: '40px', textAlign: 'center' }}>
-          <h3>Aún no hay períodos consolidados</h3>
-          <p>Seleccioná un mes arriba y clickeá "Consolidar Mes" para comenzar.</p>
-        </div>
-      )}
-
       {loading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--gris-texto)' }}>
-          <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', marginBottom: '8px' }} />
+        <div style={{ padding: '60px', textAlign: 'center', color: 'var(--gris-texto)' }}>
+          <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
           <div>Cargando datos del período...</div>
         </div>
-      ) : selectedCierreData && (
+      ) : !selectedCierreData ? (
+        /* Empty State: Período Sin Consolidar */
+        <div className="cierre-empty-card">
+          <div className="cierre-empty-icon">
+            <Calendar size={32} />
+          </div>
+          <h3 className="cierre-empty-title">
+            Período {periodoLabel(selectedPeriod)} sin consolidar
+          </h3>
+          <p className="cierre-empty-desc">
+            Aún no se ha consolidado este mes. Al hacerlo, el sistema calculará de forma automática las horas trabajadas, ausencias, tardanzas y horas extra de cada empleado para generar un borrador preliminar.
+          </p>
+          {isAdmin ? (
+            <button 
+              className="cierre-primary-btn" 
+              onClick={() => handleConsolidar(selectedPeriod)}
+              disabled={actionLoading || !selectedPeriod}
+            >
+              {actionLoading ? (
+                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <RefreshCcw size={16} />
+              )}
+              Consolidar Período Ahora
+            </button>
+          ) : (
+            <p style={{ fontSize: '13px', color: 'var(--rojo)', fontWeight: 600 }}>
+              Solo los usuarios administradores pueden consolidar nuevos períodos.
+            </p>
+          )}
+        </div>
+      ) : (
+        /* Período Consolidado (Borrador o Cerrado) */
         <>
-          {/* Status overview for draft */}
+          {/* Visualización del Proceso y Alertas (Solo Borrador + Admin) */}
           {selectedCierreData.estado === 'borrador' && isAdmin && (
-            <div className="stats-grid" style={{ marginBottom: '24px' }}>
-              <div className="stat-card">
-                <div className="stat-icon yellow"><AlertTriangle size={24} /></div>
-                <div className="stat-info">
-                  <span className="stat-label">Novedades Pendientes</span>
-                  <span className="stat-value">{pendingNovedades}</span>
-                  <span className="stat-change down">Requieren resolución antes de cerrar</span>
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon blue"><FileBarChart size={24} /></div>
-                <div className="stat-info">
-                  <span className="stat-label">Estado</span>
-                  <span className="stat-value" style={{ fontSize: '1.2rem' }}>En revisión</span>
-                  <span className="stat-change">El resumen es un borrador temporal</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Wizard steps for admin in draft */}
-          {selectedCierreData.estado === 'borrador' && isAdmin && (
-            <div className="card" style={{ marginBottom: '24px' }}>
-              <div className="card-header">
-                <h3 className="card-title">Proceso de Cierre — {periodoLabel(selectedCierreData.periodo)}</h3>
-              </div>
-              <div className="card-body">
-                <div style={{ display: 'flex', gap: '16px', overflowX: 'auto' }}>
-                  {[
-                    { step: 1, title: 'Revisión', desc: 'Verificar fichadas y novedades pendientes', active: pendingNovedades > 0 },
-                    { step: 2, title: 'Resumen', desc: 'Generar resumen por empleado', active: pendingNovedades === 0 },
-                    { step: 3, title: 'Exportación', desc: 'Exportar a sistemas externos', active: false },
-                  ].map((s) => (
-                    <div
-                      key={s.step}
-                      style={{
-                        flex: 1,
-                        minWidth: 180,
-                        padding: '20px',
-                        background: s.active ? 'var(--azul-principal-light)' : 'var(--gris-muy-claro)',
-                        borderRadius: '12px',
-                        border: s.active ? '2px solid var(--azul-principal)' : '2px solid transparent',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        position: 'relative',
-                      }}
-                    >
-                      <div style={{
-                        width: 28, height: 28, borderRadius: '50%',
-                        background: s.active ? 'var(--azul-principal)' : 'var(--gris-medio)',
-                        color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '13px', fontWeight: 700,
-                      }}>
-                        {s.step}
+            <>
+              {/* Alertas Rápidas */}
+              <div className="stats-grid">
+                <div className="stat-card">
+                  {pendingNovedades > 0 ? (
+                    <>
+                      <div className="stat-icon red"><AlertTriangle size={24} /></div>
+                      <div className="stat-info">
+                        <span className="stat-label">Novedades Pendientes</span>
+                        <span className="stat-value">{pendingNovedades}</span>
+                        <span className="stat-change down">Se deben aprobar o rechazar antes de cerrar</span>
                       </div>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{s.title}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--gris-texto)' }}>{s.desc}</div>
-                      {s.step < 3 && (
-                        <ChevronRight
-                          size={16}
-                          style={{
-                            position: 'absolute', right: -12, top: '50%', transform: 'translateY(-50%)',
-                            color: 'var(--gris-medio)',
-                          }}
-                        />
-                      )}
-                    </div>
-                  ))}
+                    </>
+                  ) : (
+                    <>
+                      <div className="stat-icon green"><CheckCircle size={24} /></div>
+                      <div className="stat-info">
+                        <span className="stat-label">Novedades</span>
+                        <span className="stat-value" style={{ fontSize: '1.25rem', color: 'var(--verde)' }}>¡Todo resuelto!</span>
+                        <span className="stat-change up">No quedan novedades pendientes por revisar</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon blue"><FileBarChart size={24} /></div>
+                  <div className="stat-info">
+                    <span className="stat-label">Estado del Borrador</span>
+                    <span className="stat-value" style={{ fontSize: '1.25rem' }}>Listo para revisión</span>
+                    <span className="stat-change">Puedes recalcular en caso de cambios en fichadas</span>
+                  </div>
                 </div>
               </div>
-              <div className="card-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <button className="btn btn-outline" disabled={actionLoading} onClick={() => handleConsolidar(selectedCierreData.periodo)}>
-                  <RefreshCcw size={16} /> Recalcular Borrador
-                </button>
-                <button 
-                  className="btn btn-primary" 
-                  disabled={pendingNovedades > 0 || actionLoading}
-                  onClick={handleCerrar}
-                >
-                  <CheckCircle size={16} /> Aprobar y Cerrar Definitivamente
-                </button>
+
+              {/* Wizard Steps */}
+              <div className="cierre-process-card">
+                <div className="cierre-wizard-steps">
+                  <div className={`cierre-wizard-step ${pendingNovedades > 0 ? 'active' : 'completed'}`}>
+                    <div className="cierre-step-number">1</div>
+                    <div className="cierre-step-title">Revisar Novedades</div>
+                    <div className="cierre-step-desc">
+                      {pendingNovedades > 0 
+                        ? `Quedan ${pendingNovedades} novedades pendientes.` 
+                        : 'Todas las novedades han sido resueltas.'}
+                    </div>
+                    <ChevronRight className="cierre-step-connector" size={16} />
+                  </div>
+                  
+                  <div className={`cierre-wizard-step ${pendingNovedades === 0 ? 'active' : ''}`}>
+                    <div className="cierre-step-number">2</div>
+                    <div className="cierre-step-title">Validar Datos y Recalcular</div>
+                    <div className="cierre-step-desc">Asegúrate de que no haya fichadas faltantes. Recalcula si hiciste correcciones.</div>
+                    <ChevronRight className="cierre-step-connector" size={16} />
+                  </div>
+
+                  <div className="cierre-wizard-step">
+                    <div className="cierre-step-number">3</div>
+                    <div className="cierre-step-title">Aprobar y Cerrar</div>
+                    <div className="cierre-step-desc">Cierra definitivamente el período para inmutar los datos y habilitar al contador.</div>
+                  </div>
+                </div>
+
+                <div className="card-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <button 
+                    className="btn btn-outline" 
+                    disabled={actionLoading} 
+                    onClick={() => handleConsolidar(selectedCierreData.periodo)}
+                  >
+                    {actionLoading ? (
+                      <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    ) : (
+                      <RefreshCcw size={16} />
+                    )}
+                    Recalcular Borrador
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    disabled={pendingNovedades > 0 || actionLoading}
+                    onClick={handleCerrar}
+                  >
+                    {actionLoading ? (
+                      <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    ) : (
+                      <CheckCircle size={16} />
+                    )}
+                    Aprobar y Cerrar Definitivamente
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
-          {/* Reopen banner for closed periods */}
-          {selectedCierreData.estado === 'cerrado' && isAdmin && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--verde-light)', padding: '12px 20px', borderRadius: '8px', marginBottom: '24px', border: '1px solid var(--verde)' }}>
+          {/* Banner de Período Cerrado */}
+          {selectedCierreData.estado === 'cerrado' && (
+            <div className="cierre-closed-banner">
               <div>
-                <strong style={{ color: 'var(--verde)' }}>Período Cerrado Inmutable</strong>
-                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>Cerrado por: {selectedCierreData.usuarioNombre || 'Sistema'} el {selectedCierreData.fechaCierre ? new Date(selectedCierreData.fechaCierre).toLocaleString('es-AR') : ''}</p>
+                <div className="cierre-closed-title">
+                  <CheckCircle size={20} />
+                  Período Cerrado e Inmutable
+                </div>
+                <div className="cierre-closed-details">
+                  Cerrado por: <strong>{selectedCierreData.usuarioNombre || 'Sistema'}</strong> el {selectedCierreData.fechaCierre ? new Date(selectedCierreData.fechaCierre).toLocaleString('es-AR') : ''}
+                </div>
               </div>
-              <button className="btn btn-sm btn-outline" style={{ borderColor: 'var(--rojo)', color: 'var(--rojo)' }} onClick={handleReabrir}>
-                <Undo2 size={14} /> Reabrir Período
-              </button>
+              {isAdmin && (
+                <button 
+                  className="btn btn-sm btn-outline" 
+                  style={{ borderColor: 'var(--rojo)', color: 'var(--rojo)' }} 
+                  onClick={handleReabrir}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', marginRight: '4px' }} />
+                  ) : (
+                    <Undo2 size={14} style={{ marginRight: '4px' }} />
+                  )}
+                  Reabrir Período
+                </button>
+              )}
             </div>
           )}
 
-          {/* Summary table */}
+          {/* Tabla de Resumen */}
           {selectedCierreData.resumenEmpleados && selectedCierreData.resumenEmpleados.length > 0 ? (
             <div className="card">
               <div className="card-header">
-                <h3 className="card-title">Resumen de Preliquidación</h3>
+                <h3 className="card-title">Resumen de Preliquidación — {periodoLabel(selectedCierreData.periodo)}</h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-outline btn-sm" onClick={exportExcel}><Download size={14} /> Excel</button>
-                  <button className="btn btn-outline btn-sm" onClick={exportCSV}><Download size={14} /> CSV</button>
+                  <button className="btn btn-outline btn-sm" onClick={exportExcel}>
+                    <Download size={14} /> Excel
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={exportCSV}>
+                    <Download size={14} /> CSV
+                  </button>
                 </div>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
@@ -365,10 +472,16 @@ export function CierrePage() {
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div style={{
-                                  width: 28, height: 28, borderRadius: '50%',
-                                  background: 'var(--azul-principal-light)', color: 'var(--azul-principal)',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: '11px', fontWeight: 600,
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: '50%',
+                                  background: 'var(--azul-principal-light)',
+                                  color: 'var(--azul-principal)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
                                 }}>
                                   {emp.nombre[0]}{emp.apellido[0]}
                                 </div>
@@ -399,6 +512,17 @@ export function CierrePage() {
              </div>
           )}
         </>
+      )}
+
+      {toast && (
+        <div className="toast-container">
+          <div className={`toast ${toast.type}`}>
+            {toast.type === 'success' && <CheckCircle size={18} style={{ color: 'var(--verde)' }} />}
+            {toast.type === 'error' && <AlertTriangle size={18} style={{ color: 'var(--rojo)' }} />}
+            {toast.type === 'warning' && <AlertTriangle size={18} style={{ color: 'var(--amarillo)' }} />}
+            <span>{toast.message}</span>
+          </div>
+        </div>
       )}
     </div>
   );
