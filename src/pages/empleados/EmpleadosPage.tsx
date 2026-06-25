@@ -203,7 +203,7 @@ export function EmpleadosPage() {
                     </td>
                     <td>{emp.dni}</td>
                     <td>{emp.categoriaLaboral}</td>
-                    <td style={{ fontSize: '12px' }}>{emp.horarios?.nombre || '—'}</td>
+                    <td style={{ fontSize: '12px' }}>{emp.horarios?.nombre || (emp.rotacion ? `${emp.rotacion.nombre} (rotativo)` : '—')}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={`badge badge-${emp.tipoJornada === 'completa' ? 'activo' : 'pendiente'}`}>
                         {emp.tipoJornada.charAt(0).toUpperCase() + emp.tipoJornada.slice(1)}
@@ -267,7 +267,7 @@ export function EmpleadosPage() {
                 <div><strong>Categoria:</strong> {detailEmpleado.categoriaLaboral || '-'}</div>
                 <div><strong>Convenio:</strong> {detailEmpleado.convenio || '-'}</div>
                 <div><strong>Jornada:</strong> {detailEmpleado.tipoJornada || '-'}</div>
-                <div><strong>Horario:</strong> {detailEmpleado.horarios?.nombre || '-'}</div>
+                <div><strong>Horario:</strong> {detailEmpleado.horarios?.nombre || (detailEmpleado.rotacion ? `${detailEmpleado.rotacion.nombre} (rotativo)` : '-')}</div>
                 <div><strong>Modalidad fichada:</strong> {detailEmpleado.modalidadFichada || '-'}</div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <strong>Dias descanso:</strong> {(detailEmpleado.diasDescanso || []).join(', ') || '-'}
