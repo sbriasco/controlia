@@ -61,7 +61,7 @@ export const createRotacion = async (req: Request, res: Response) => {
           data: turnos.map((t: any) => ({
             rotacionid: rotacion.id,
             semana: Number(t.semana),
-            horarioid: Number(t.horarioid)
+            horarioid: Number(t.horarioid ?? t.horarioId)
           }))
         });
       }
