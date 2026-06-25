@@ -11,7 +11,8 @@ export const createEmpleadoSchema = z.object({
     categoriaLaboral: z.string().min(1, 'La categoría es requerida').max(100),
     convenio: z.string().max(100).optional().nullable(),
     tipoJornada: z.string().min(1, 'El tipo de jornada es requerido').max(50),
-    horarioId: z.number().int().positive('El horarioId debe ser un ID válido'),
+    // 0/null para empleados rotativos (sin horario fijo); el controlador mapea 0 -> null
+    horarioId: z.number().int().nonnegative('El horarioId debe ser un ID válido').nullable().optional(),
     diasDescanso: z.union([z.string(), z.array(z.string())]),
     modalidadFichada: z.string().min(1, 'La modalidad de fichada es requerida').max(50),
     estado: z.string().min(1, 'El estado es requerido').max(50),
@@ -29,7 +30,7 @@ export const updateEmpleadoSchema = z.object({
     categoriaLaboral: z.string().min(1).max(100).optional(),
     convenio: z.string().max(100).optional().nullable(),
     tipoJornada: z.string().min(1).max(50).optional(),
-    horarioId: z.number().int().positive().optional(),
+    horarioId: z.number().int().nonnegative().nullable().optional(),
     diasDescanso: z.union([z.string(), z.array(z.string())]).optional(),
     modalidadFichada: z.string().min(1).max(50).optional(),
     estado: z.string().min(1).max(50).optional(),
