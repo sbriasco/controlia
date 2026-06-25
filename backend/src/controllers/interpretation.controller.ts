@@ -255,7 +255,9 @@ export const processInterpretation = async (req: Request, res: Response) => {
             estado: 'pendiente',
             origen: 'automatica',
             periodo,
-            observacion: `Horas extra detectadas (${resultado.tipoHorasExtra === 'horas_extra_100' ? '100%' : '50%'}): ${resultado.horasExtra} min.${esFeriado ? ' (Feriado)' : esDomingo ? ' (Domingo)' : ''}`
+            observacion: resultado.feriadoTrabajado
+              ? `${esFeriado ? 'Feriado' : 'Domingo'} trabajado: ${resultado.horasExtra} min al 100%.`
+              : `Horas extra detectadas (${resultado.tipoHorasExtra === 'horas_extra_100' ? '100%' : '50%'}): ${resultado.horasExtra} min.${esFeriado ? ' (Feriado)' : esDomingo ? ' (Domingo)' : ''}`
           });
         }
 

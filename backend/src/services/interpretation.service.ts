@@ -42,6 +42,7 @@ export interface ResultadoJornada {
   minutosSalidaAnticipada: number;
   dobleFichadas: DobleFichadaDetectada[];
   descansoNoTomado: boolean;
+  feriadoTrabajado: boolean;
 }
 
 export interface ReglasConfig {
@@ -96,6 +97,23 @@ export class InterpretationService {
       return diff;
     }
     return 0;
+  }
+
+  /**
+   * Suma el tiempo efectivamente trabajado en el día (en minutos),
+   * acumulando cada par entrada→salida consecutivo. Excluye los descansos
+   * (el intervalo salida→entrada del mediodía no se cuenta).
+   */
+  static calcularMinutosTrabajados(fichadas: FichadaRaw[]): number {
+    let total = 0;
+    for (let i = 0; i < fichadas.length - 1; i++) {
+      if (fichadas[i].tipo === 'entrada' && fichadas[i + 1].tipo === 'salida') {
+        const diff = this.getMinutesInArgentina(fichadas[i + 1].timestamp) -
+          this.getMinutesInArgentina(fichadas[i].timestamp);
+        if (diff > 0) total += diff;
+      }
+    }
+    return total;
   }
 
   /**
@@ -211,7 +229,8 @@ export class InterpretationService {
       salidaAnticipada: false,
       minutosSalidaAnticipada: 0,
       dobleFichadas: [],
-      descansoNoTomado: false
+      descansoNoTomado: false,
+      feriadoTrabajado: false
     };
 
     // 1. Verificar ausencia
@@ -222,6 +241,23 @@ export class InterpretationService {
 
     // Si no es laborable y no hay fichadas, no hay nada que analizar
     if (!isLaborable && fichadas.length === 0) {
+      return resultado;
+    }
+
+    // Jornada en domingo o feriado: todo el tiempo trabajado se paga al 100%.
+    // No se aplican tardanza/salida anticipada/descanso porque la jornada
+    // completa ya tiene recargo. Se siguen detectando dobles fichadas.
+    if (esDomingoOFeriado) {
+      const minutosTrabajados = this.calcularMinutosTrabajados(fichadas);
+      if (minutosTrabajados > 0) {
+        resultado.feriadoTrabajado = true;
+        resultado.horasExtra = minutosTrabajados;
+        resultado.tipoHorasExtra = 'horas_extra_100';
+      }
+      resultado.dobleFichadas = this.checkDobleFichadas(
+        fichadas,
+        reglas.doble_fichada_umbral_minutos
+      );
       return resultado;
     }
 
