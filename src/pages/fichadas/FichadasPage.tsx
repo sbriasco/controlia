@@ -59,7 +59,7 @@ export function FichadasPage() {
     try {
       const params: { fecha?: string; empleadoId?: number } = {};
       if (dateFilter) params.fecha = dateFilter;
-      if (!isAdmin && user?.id) params.empleadoId = user.id;
+      if (!isAdmin && user?.empleadoId) params.empleadoId = user.empleadoId;
 
       const data = await fichadaService.getAll(params);
       setFichadas(data);
@@ -69,7 +69,7 @@ export function FichadasPage() {
     } finally {
       if (showLoader) setLoading(false);
     }
-  }, [dateFilter, isAdmin, user?.id]);
+  }, [dateFilter, isAdmin, user?.empleadoId]);
 
   useEffect(() => {
     loadFichadas(true);

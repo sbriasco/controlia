@@ -72,7 +72,7 @@ export function NovedadesPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newNovedadData, setNewNovedadData] = useState({
-    empleadoId: user?.rol === 'admin' ? 0 : user?.id || 0,
+    empleadoId: user?.rol === 'admin' ? 0 : user?.empleadoId || 0,
     tipo: 'vacaciones',
     fechaInicio: '',
     fechaFin: '',
@@ -137,7 +137,7 @@ export function NovedadesPage() {
       setNovedades(prev => [res, ...prev]);
       setShowNewModal(false);
       setNewNovedadData({
-        empleadoId: user?.rol === 'admin' ? 0 : user?.id || 0,
+        empleadoId: user?.rol === 'admin' ? 0 : user?.empleadoId || 0,
         tipo: 'vacaciones',
         fechaInicio: '',
         fechaFin: '',
@@ -173,7 +173,7 @@ export function NovedadesPage() {
     }
 
     // Si no es admin, solo mostrar las del usuario actual
-    if (!isAdmin && n.empleadoId !== (user?.id ?? 0)) return false;
+    if (!isAdmin && n.empleadoId !== (user?.empleadoId ?? 0)) return false;
 
     return true;
   });

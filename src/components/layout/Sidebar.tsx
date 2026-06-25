@@ -95,7 +95,7 @@ export function Sidebar() {
   useEffect(() => {
     if (user) {
       novedadService.getAll().then(novedades => {
-        const count = novedades.filter(n => n.estado === 'pendiente' && (user.rol === 'admin' || n.empleadoId === user.id)).length;
+        const count = novedades.filter(n => n.estado === 'pendiente' && (user.rol === 'admin' || n.empleadoId === user.empleadoId)).length;
         setPendingNovedadesCount(count);
       }).catch(console.error);
     }

@@ -43,7 +43,7 @@ export function EmpleadoDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const currentEmpleadoId = user?.id ?? EMPLEADO_DEMO_ID;
+        const currentEmpleadoId = user?.empleadoId ?? EMPLEADO_DEMO_ID;
         const [emp] = await Promise.all([empleadoService.getById(currentEmpleadoId)]);
         setEmpleado(emp);
         
@@ -114,7 +114,7 @@ export function EmpleadoDashboard() {
       const d = new Date();
       const localTimestamp = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
 
-      const currentEmpleadoId = user?.id ?? EMPLEADO_DEMO_ID;
+      const currentEmpleadoId = user?.empleadoId ?? EMPLEADO_DEMO_ID;
       await fichadaService.create({
         empleadoId: currentEmpleadoId,
         timestamp: localTimestamp,
