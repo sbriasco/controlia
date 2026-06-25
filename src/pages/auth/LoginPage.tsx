@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, FileText, CheckCircle, LogIn, Mail, Lock, Eye, EyeOff, Info } from 'lucide-react';
+import { Clock, FileText, CheckCircle, LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../../components/ui/Logo';
 import './LoginPage.css';
@@ -27,11 +27,6 @@ export function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleTestUserClick = (testEmail: string, testPass: string) => {
-    setEmail(testEmail);
-    setPassword(testPass);
   };
 
   return (
@@ -100,36 +95,6 @@ export function LoginPage() {
               {isLoading ? 'Iniciando sesión...' : 'Ingresar al Sistema'}
               {!isLoading && <LogIn size={18} />}
             </button>
-            
-            <div className="test-users-box">
-              <div className="test-users-title">
-                <Info size={16} />
-                <span>Usuarios de prueba (Clic para rellenar)</span>
-              </div>
-              <ul className="test-users-list">
-                <li 
-                  className="test-users-item" 
-                  onClick={() => handleTestUserClick('admin@controlia.com', 'admin123')}
-                >
-                  <span>Administrador</span>
-                  <span className="test-user-credentials">admin@controlia.com</span>
-                </li>
-                <li 
-                  className="test-users-item" 
-                  onClick={() => handleTestUserClick('maria.gomez@controlia.com', 'empleado123')}
-                >
-                  <span>Empleado</span>
-                  <span className="test-user-credentials">maria.gomez@controlia.com</span>
-                </li>
-                <li 
-                  className="test-users-item" 
-                  onClick={() => handleTestUserClick('contador@controlia.com', 'contador123')}
-                >
-                  <span>Contador</span>
-                  <span className="test-user-credentials">contador@controlia.com</span>
-                </li>
-              </ul>
-            </div>
           </form>
         </div>
       </div>
