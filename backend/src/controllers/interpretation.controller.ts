@@ -155,9 +155,17 @@ export const processInterpretation = async (req: Request, res: Response) => {
     const currentIterDate = new Date(Date.UTC(effectiveStart.getFullYear(), effectiveStart.getMonth(), effectiveStart.getDate()));
     const endUTC = new Date(Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()));
 
+    // "Hoy" en horario de Argentina (UTC-3). Evita evaluar días futuros y, con ello,
+    // falsas ausencias por desfase de zona horaria del servidor o del cliente.
+    const ahoraArg = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const hoyArgentina = `${ahoraArg.getUTCFullYear()}-${String(ahoraArg.getUTCMonth() + 1).padStart(2, '0')}-${String(ahoraArg.getUTCDate()).padStart(2, '0')}`;
+
     while (currentIterDate <= endUTC) {
       const dateStr = currentIterDate.toISOString().split('T')[0];
       const dayOfWeek = currentIterDate.getUTCDay();
+
+      // No evaluar días futuros: no se puede estar ausente en un día que aún no ocurrió.
+      if (dateStr > hoyArgentina) break;
 
       if (fechaIngresoStr && dateStr < fechaIngresoStr) {
         currentIterDate.setUTCDate(currentIterDate.getUTCDate() + 1);
